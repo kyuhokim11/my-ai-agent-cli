@@ -1,7 +1,7 @@
 {
-    "name": "my-ai-agent-cli",
+    "name": "@jobbykim/ai-init",
     "version": "1.0.0",
-    "description": "어떤 PC, 어떤 AI에서든 내 스킬과 행동 규칙을 주입하는 개인용 CLI 에이전트",
+    "description": "어떤 프로젝트에서도 jobkim의 AI 개발 규칙과 스킬을 동일하게 적용하는 초기화 CLI",
     "main": "setup.js",
     "bin": {
         "ai-init": "./setup.js"
@@ -16,7 +16,8 @@
         "bundled-skills/"
     ],
     "scripts": {
-        "test": "node --test"
+        "test": "node --test",
+        "prepublishOnly": "npm test"
     },
     "engines": {
         "node": ">=18"
@@ -37,5 +38,16 @@
         "private-cli-agent"
     ],
     "author": "jobkim",
-    "license": "MIT"
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/kyuhokim11/my-ai-agent-cli.git"
+    },
+    "homepage": "https://github.com/kyuhokim11/my-ai-agent-cli#readme",
+    "bugs": {
+        "url": "https://github.com/kyuhokim11/my-ai-agent-cli/issues"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
 }

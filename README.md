@@ -19,11 +19,26 @@
 
 ## 설치 동작
 
+### 실행 전 확인
+
+- Node.js 18 이상이 필요합니다.
+- Ponytail과 Paperthin의 최신 스킬을 받으려면 GitHub 네트워크 연결이 필요합니다.
+- CLI는 현재 프로젝트에 `.ai-core/`, `.agents/`와 선택한 엔진의 지침 파일을 생성하거나 갱신합니다.
+- 기존 프로젝트에서는 먼저 Git 상태를 확인하고 필요한 변경을 커밋하거나 백업하는 것을 권장합니다.
+- Windows에서 실제 패키지 검증을 완료했습니다. macOS와 Linux 실환경 검증은 아직 남아 있습니다.
+
 ```bash
-ai-init
+npx @jobbykim/ai-init
 ```
 
-실행 후 신규/기존 프로젝트 유형과 Codex, Gemini/Antigravity 또는 둘 모두를 선택할 수 있습니다.
+별도 전역 설치 없이 초기화할 프로젝트의 루트에서 명령을 실행합니다. 실행 후 신규/기존 프로젝트 유형과 Codex, Gemini/Antigravity 또는 둘 모두를 선택할 수 있습니다.
+
+전역 명령으로 반복 사용하려면 다음과 같이 설치할 수 있습니다.
+
+```bash
+npm install --global @jobbykim/ai-init
+ai-init
+```
 
 - 원본 스킬은 현재 프로젝트의 `.ai-core/sources/<source-id>`에 저장됩니다.
 - 공통 Agent Skills는 `.agents/skills`에 연결됩니다. Codex, Gemini CLI와 Antigravity가 이 경로를 지원합니다.
@@ -35,6 +50,9 @@ ai-init
 - 기존 `AGENTS.md`와 `GEMINI.md` 내용은 보존하고 이 CLI의 마커 내부만 갱신합니다.
 - 이전 실행에서 이 CLI가 관리했다고 표시한 스킬만 업데이트하거나 정리합니다.
 - 네트워크 동기화가 실패하면 마지막으로 정상 동기화된 캐시를 사용합니다. 최초 실행이고 캐시도 없으면 설치를 중단합니다.
+- 다시 실행하면 이 CLI의 관리 영역만 최신 규칙과 스킬로 갱신합니다.
+
+현재 자동 제거 명령은 제공하지 않습니다. 초기화 결과를 되돌려야 할 때는 실행 전 Git 상태와 실행 후 diff를 기준으로 관리 파일을 확인한 뒤 복구하세요.
 
 ### 신규 프로젝트
 
