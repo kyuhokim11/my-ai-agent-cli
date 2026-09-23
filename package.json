@@ -4,7 +4,7 @@
     "description": "어떤 프로젝트에서도 jobkim의 AI 개발 규칙과 스킬을 동일하게 적용하는 초기화 CLI",
     "main": "setup.js",
     "bin": {
-        "ai-init": "./setup.js"
+        "ai-init": "setup.js"
     },
     "files": [
         "setup.js",
