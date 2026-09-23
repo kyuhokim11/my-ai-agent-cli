@@ -6,6 +6,21 @@
     "bin": {
         "ai-init": "./setup.js"
     },
+    "files": [
+        "setup.js",
+        "skill-sources.json",
+        "NOTICE",
+        "LICENSE",
+        "README.md",
+        "rules/",
+        "bundled-skills/"
+    ],
+    "scripts": {
+        "test": "node --test"
+    },
+    "engines": {
+        "node": ">=18"
+    },
     "keywords": [
         "ai",
         "agent",

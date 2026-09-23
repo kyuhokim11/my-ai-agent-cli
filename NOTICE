@@ -1,0 +1,23 @@
+This project downloads and installs skill files from the following open-source projects:
+
+Ponytail
+Copyright (c) 2026 DietrichGebert
+Source: https://github.com/DietrichGebert/ponytail
+License: MIT License
+
+Paperthin
+Copyright (c) 2026 LilMGenius
+Source: https://github.com/LilMGenius/paperthin
+License: MIT License
+
+Paperthin includes third-party material from mattpocock/skills and preserves the
+following upstream attribution:
+
+mattpocock/skills
+Copyright (c) 2026 Matt Pocock
+Source: https://github.com/mattpocock/skills
+License: MIT License
+
+The installer places the applicable upstream LICENSE and NOTICE files in each
+installed skill directory. Copyright and permission notices must remain included
+in copies or substantial portions of the downloaded software.

@@ -1,0 +1,18 @@
+[
+    {
+        "id": "ponytail",
+        "owner": "DietrichGebert",
+        "repo": "ponytail",
+        "ref": "main",
+        "skillsPath": "skills",
+        "legalFiles": ["LICENSE"]
+    },
+    {
+        "id": "paperthin",
+        "owner": "LilMGenius",
+        "repo": "paperthin",
+        "ref": "main",
+        "skillsPath": "skills",
+        "legalFiles": ["LICENSE", "NOTICE"]
+    }
+]
