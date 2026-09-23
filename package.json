@@ -1,0 +1,26 @@
+{
+    "name": "my-ai-agent-cli",
+    "version": "1.0.0",
+    "description": "어떤 PC, 어떤 AI에서든 내 스킬과 행동 규칙을 주입하는 개인용 CLI 에이전트",
+    "main": "setup.js",
+    "bin": {
+        "ai-init": "./setup.js"
+    },
+    "keywords": [
+        "ai",
+        "agent",
+        "cli",
+        "personal-agent",
+        "claude",
+        "codex",
+        "gemini",
+        "gpt",
+        "llm",
+        "openai",
+        "personal-agent",
+        "private-agent",
+        "private-cli-agent"
+    ],
+    "author": "jobkim",
+    "license": "MIT"
+}
