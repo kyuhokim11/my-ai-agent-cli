@@ -12,6 +12,8 @@ AI 개발 작업 원칙, 프로젝트 유형별 초기화 정책과 재사용 �
 
 이 프로젝트가 전체 AI 개발 시스템에서 맡는 위치, 책임 범위와 향후 프로젝트 분리·연계 원칙은 [AI 개발 시스템 전략과 이 프로젝트의 역할](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/system-strategy.md)을 참고하세요.
 
+Git 커밋·푸시·태그와 npm 게시 작업은 사용자가 직접 수행하는 것을 기본으로 합니다. 단계별 명령과 특정 단계만 에이전트에게 맡기는 방법은 [사용자 직접 수행 작업 및 릴리스 기록](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/manual-operations.md)을 참고하세요.
+
 ## 현재 지원 소스
 
 - [Ponytail](https://github.com/DietrichGebert/ponytail)
@@ -51,7 +53,9 @@ ai-init
 - 기존 사용자 스킬과 이름이 겹치면 사용자 파일을 보존하고 해당 스킬 설치를 건너뜁니다.
 - 기존 `AGENTS.md`와 `GEMINI.md` 내용은 보존하고 이 CLI의 마커 내부만 갱신합니다.
 - 이전 실행에서 이 CLI가 관리했다고 표시한 스킬만 업데이트하거나 정리합니다.
+- `.gitignore`의 관리 블록에 `.ai-core/`, `.agents/rules/jobkim.md`, `.agents/skills/`를 추가합니다. `AGENTS.md`와 `GEMINI.md`는 제외하지 않습니다.
 - 생성된 지침은 코딩 작업에 Ponytail을 기본 적용하고, Paperthin을 포함한 나머지 스킬은 요청·작업 상태와 각 스킬 설명이 일치할 때만 사용하도록 연결합니다. 사용자 호출 전용 스킬은 자동 실행하지 않습니다.
+- 외부 스킬 동기화를 시작하면 대상 저장소를 표시합니다. 각 네트워크 요청이 30초 동안 응답하지 않으면 중단하고 기존 캐시 사용 여부나 오류를 안내합니다.
 - 네트워크 동기화가 실패하면 마지막으로 정상 동기화된 캐시를 사용합니다. 최초 실행이고 캐시도 없으면 설치를 중단합니다.
 - 다시 실행하면 이 CLI의 관리 영역만 최신 규칙과 스킬로 갱신합니다.
 

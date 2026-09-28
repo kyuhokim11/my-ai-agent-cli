@@ -24,6 +24,72 @@ Codex가 담당하는 작업:
 - 사용자 실행 명령과 완료 기준 안내
 - 사용자 실행 후 Git과 npm 상태 확인
 
+## 작업 승인과 Git 실행 방식
+
+상태를 변경하는 작업은 Codex가 목적, 범위, 대상 파일과 검증 방법을 먼저 제시하고 사용자가 승인한 범위에서 진행한다. 읽기, 검색과 상태 확인은 승인된 작업의 설계와 검증에 필요한 범위에서 수행할 수 있다.
+
+Git 작업은 사용자가 직접 수행하는 것을 기본으로 한다. Codex는 각 단계의 실행 위치, 전체 명령어, 포함·제외 파일, 예상 결과와 중단 조건을 제공한다. 사용자는 원하는 경우 특정 단계만 일회성으로 위임할 수 있으며, 그 승인은 해당 단계가 끝나면 소멸한다. 스테이징 승인은 커밋 승인이 아니고, 커밋 승인은 푸시·태그·npm 게시 승인이 아니다.
+
+### 상태 확인
+
+```powershell
+git branch --show-current
+git status --short --branch
+git diff --stat
+git diff
+```
+
+일회성 위임 예시: `현재 Git 상태와 변경 내용을 확인해서 커밋 범위만 정리해줘. 수정, 스테이징, 커밋은 하지 마.`
+
+### 스테이징
+
+```powershell
+git add <파일1> <파일2>
+git status --short
+git diff --cached --name-only
+git diff --cached --check
+git diff --cached
+```
+
+일회성 위임 예시: `이번에 보고한 커밋 대상 파일만 스테이징하고 결과를 보여줘. 커밋과 푸시는 하지 마.`
+
+### 커밋
+
+```powershell
+git commit -m "<type>: <한글 설명>"
+git log -1 --oneline
+git rev-parse HEAD
+```
+
+일회성 위임 예시: `현재 스테이징된 변경만 제안한 메시지로 커밋해줘. 추가 스테이징과 푸시는 하지 마.`
+
+### 브랜치 푸시
+
+```powershell
+git push origin main
+git status --short --branch
+```
+
+일회성 위임 예시: `현재 main의 미푸시 커밋만 origin/main에 푸시하고 결과를 확인해줘. 태그와 npm 작업은 하지 마.`
+
+### 로컬 태그 생성
+
+```powershell
+git tag -a v<version> -m "release: v<version>"
+git rev-list -n 1 v<version>
+git rev-parse HEAD
+```
+
+일회성 위임 예시: `현재 HEAD에 지정한 버전의 로컬 태그만 생성하고 HEAD와 태그 SHA가 같은지 확인해줘. 태그는 푸시하지 마.`
+
+### 태그 푸시
+
+```powershell
+git push origin v<version>
+```
+
+일회성 위임 예시: `npm 공개 검증 결과를 확인한 뒤 지정한 기존 로컬 태그만 origin에 푸시해줘.`
+
 ## v1.0.0 릴리스 기록
 
 릴리스 완료일: 2026-09-23, Asia/Seoul
@@ -73,6 +139,54 @@ npm 계정과 패키지 scope는 `jobbykim`, 패키지 저자 표기는 `jobkim`
 - 별도의 `update`, `status`, `uninstall` 명령은 제공하지 않으며, 현재 CLI는 하나의 대화형 초기화 흐름만 제공한다.
 - 외부 스킬의 `main` 브랜치를 추적하므로 실행 시점에 따라 설치 내용이 달라질 수 있다. 각 설치에서 실제 동기화한 tree SHA는 대상 프로젝트의 `.ai-core/sources/<source-id>/_SOURCE.json`에 기록하지만, npm 릴리스 자체는 해당 upstream SHA를 고정하지 않는다.
 
+## v1.1.0 릴리스 준비 기록
+
+릴리스 상태: 준비 중
+
+실행 순서와 실패 시 중단 기준은 [이후 릴리스 절차](#이후-릴리스-절차)를 따른다. 릴리스 기준 브랜치는 `main`이며, 사용자는 검증된 릴리스 커밋을 푸시하고 같은 커밋에 로컬 태그를 만든다. npm 게시와 공개 패키지 검증이 끝난 뒤에만 태그를 원격에 푸시한다.
+
+### 배포 예정 정보
+
+- npm 패키지: `@jobbykim/ai-init`
+- npm 버전: `1.1.0`
+- npm dist-tag: `latest`
+- 공개 범위: public scoped package
+- Git 태그: `v1.1.0`
+- 릴리스 커밋 및 완료일: 릴리스 커밋과 공개 패키지 검증 후 기록
+
+### 릴리스 범위
+
+- 코드 작성, 기능 추가, 버그 수정, 리팩터링, 코드 리뷰, 설계와 의존성 선택 작업에 Ponytail을 기본 적용하는 공통 라우팅 정책
+- Paperthin을 포함한 나머지 스킬을 요청·작업 상태와 스킬 설명이 일치할 때 사용하는 선택 기준
+- 사용자 호출 전용 스킬의 자동 실행 방지
+- Codex `AGENTS.md`, Gemini CLI `GEMINI.md`, Antigravity `.agents/rules/jobkim.md`에 동일한 공통 정책 전달
+- 모든 대상 지침에 공통 스킬 라우팅 정책이 생성되는지 확인하는 회귀 테스트
+- 연속된 대화형 입력에서도 두 번째 응답을 잃지 않고 초기화를 계속하는 입력 처리
+- Windows 한글·공백 경로에서 네이티브 충돌을 일으킨 `fs.cpSync()` 제거와 안전한 파일 단위 복사
+- 기존 `.gitignore`를 보존하면서 ai-init 캐시, Antigravity 규칙 파일과 `.agents/skills/` 전체를 자동 제외
+- 신규·기존 프로젝트와 Codex·Gemini/Antigravity·동시 선택의 6개 조합 및 잘못된 입력 검증
+- 현재 프로젝트의 역할과 장기 AI 개발 시스템 전략 문서화
+
+### 릴리스 전 검증 상태
+
+- 패키지 버전 `1.1.0` 변경: 완료
+- Node.js `v22.22.2`, npm `10.9.7`, `main` 브랜치 확인: 완료
+- `npm test`: 20개 테스트 통과
+- `git diff --check`: 오류 없음
+- `npm publish --dry-run`: 입력 처리 수정 반영 후 재검증 필요
+- npm 공개 게시 및 `latest` 확인: 게시 후 기록
+- 빈 프로젝트 공개 `npx @jobbykim/ai-init@1.1.0` 실행: 게시 후 기록
+- 재실행 시 사용자 내용 보존과 관리 블록 비중복 확인: 게시 후 기록
+
+기존 프로젝트에는 자동 적용되지 않는다. `1.1.0` 게시 후 대상 프로젝트에서 `npx @jobbykim/ai-init@1.1.0`을 다시 실행해야 관리 블록에 새 라우팅 정책이 반영된다.
+
+### 유지되는 제한
+
+- Windows 외 macOS와 Linux의 실환경 검증은 아직 완료되지 않았다.
+- `update`, `status`, `uninstall` 전용 명령은 제공하지 않는다.
+- 외부 스킬은 각 소스의 `main` 브랜치를 추적하므로 설치 시점에 따라 내용이 달라질 수 있다.
+- 지침 기반 스킬 라우팅은 공식 플러그인의 명령, 훅 또는 지속 모드를 복제하지 않는다.
+
 ## Git과 npm의 일치 기준
 
 Git과 npm은 역할이 다르므로 최신 상태가 항상 같은 시점에 있을 필요는 없다. Git은 개발 이력과 다음 변경을 관리하고, npm은 사용자가 설치하는 특정 버전의 배포 결과를 보관한다. 따라서 npm 게시 후 Git에 문서 수정이나 다음 버전 개발 커밋이 추가되어도 정상이다.
@@ -119,7 +233,7 @@ Git과 npm은 역할이 다르므로 최신 상태가 항상 같은 시점에 �
 
 기능 추가나 CLI 흐름 변경은 패치 버전에 포함하지 않는다.
 
-### 3. 기능 버전 `1.1.0`
+### 3. 후속 기능 버전
 
 다음 후보는 설계와 사용자 승인 후 작은 단위로 구현한다.
 

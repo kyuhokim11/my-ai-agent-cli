@@ -12,6 +12,9 @@ const USER_AGENT = 'my-ai-agent-cli';
 const MANAGED_MARKER = '.ai-init-source.json';
 const MANAGED_BLOCK_START = '<!-- ai-init:jobkim:start -->';
 const MANAGED_BLOCK_END = '<!-- ai-init:jobkim:end -->';
+const GITIGNORE_BLOCK_START = '# ai-init:managed:start';
+const GITIGNORE_BLOCK_END = '# ai-init:managed:end';
+const REQUEST_TIMEOUT_MS = 30_000;
 
 function request(url, responseType = 'text', redirectCount = 0) {
     return new Promise((resolve, reject) => {
@@ -22,8 +25,7 @@ function request(url, responseType = 'text', redirectCount = 0) {
             },
         };
 
-        https
-            .get(url, requestOptions, (response) => {
+        const clientRequest = https.get(url, requestOptions, (response) => {
                 if (
                     response.statusCode >= 300 &&
                     response.statusCode < 400 &&
@@ -64,8 +66,11 @@ function request(url, responseType = 'text', redirectCount = 0) {
                     }
                     resolve(text);
                 });
-            })
-            .on('error', reject);
+            });
+        clientRequest.setTimeout(REQUEST_TIMEOUT_MS, () => {
+            clientRequest.destroy(new Error(`30초 동안 응답이 없어 요청을 중단했습니다: ${url}`));
+        });
+        clientRequest.on('error', reject);
     });
 }
 
@@ -167,6 +172,21 @@ function replaceDirectory(stagingRoot, sourceRoot) {
     }
 }
 
+function copyDirectory(sourceRoot, destinationRoot) {
+    fs.mkdirSync(destinationRoot, { recursive: true });
+    for (const entry of fs.readdirSync(sourceRoot, { withFileTypes: true })) {
+        const source = path.join(sourceRoot, entry.name);
+        const destination = path.join(destinationRoot, entry.name);
+        if (entry.isDirectory()) {
+            copyDirectory(source, destination);
+        } else if (entry.isFile()) {
+            fs.copyFileSync(source, destination);
+        } else {
+            throw new Error(`지원하지 않는 번들 파일 형식입니다: ${source}`);
+        }
+    }
+}
+
 function findSkillDirectories(sourceRoot) {
     const skillDirectories = [];
 
@@ -192,7 +212,7 @@ function syncBundledSkills(sourcesRoot) {
     const sourceRoot = path.join(sourcesRoot, 'jobkim');
     const stagingRoot = `${sourceRoot}.staging-${process.pid}`;
     fs.rmSync(stagingRoot, { recursive: true, force: true });
-    fs.cpSync(path.join(__dirname, 'bundled-skills'), stagingRoot, { recursive: true });
+    copyDirectory(path.join(__dirname, 'bundled-skills'), stagingRoot);
     fs.copyFileSync(path.join(__dirname, 'LICENSE'), path.join(stagingRoot, '_UPSTREAM_LICENSE'));
     fs.writeFileSync(
         path.join(stagingRoot, '_SOURCE.json'),
@@ -226,6 +246,7 @@ async function syncSource(source, sourcesRoot) {
     fs.rmSync(stagingRoot, { recursive: true, force: true });
     fs.mkdirSync(stagingRoot, { recursive: true });
 
+    console.log(`[동기화 중] ${source.owner}/${source.repo}`);
     try {
         await downloadSource(source, stagingRoot);
         replaceDirectory(stagingRoot, sourceRoot);
@@ -284,7 +305,7 @@ function installSkill(skill, targetRoot) {
     try {
         fs.symlinkSync(skill.directory, destination, process.platform === 'win32' ? 'junction' : 'dir');
     } catch (error) {
-        fs.cpSync(skill.directory, destination, { recursive: true });
+        copyDirectory(skill.directory, destination);
     }
     return true;
 }
@@ -331,6 +352,24 @@ function validateUniqueSkillNames(skills) {
     }
 }
 
+function parseSelectedEngines(answer) {
+    const selectedEngines = [...new Set(answer.split(',').map((item) => item.trim()))];
+    if (selectedEngines.length === 0 || selectedEngines.some((engine) => engine !== '1' && engine !== '2')) {
+        throw new Error('활성화할 AI 엔진 번호로 1, 2 또는 1,2를 입력하세요.');
+    }
+    return selectedEngines;
+}
+
+function parseProjectType(answer) {
+    if (answer.trim() === '1') {
+        return 'new';
+    }
+    if (answer.trim() === '2') {
+        return 'existing';
+    }
+    throw new Error('프로젝트 유형으로 1 또는 2를 입력하세요.');
+}
+
 function renderProjectPolicy(projectType) {
     const coreRules = fs.readFileSync(path.join(__dirname, 'rules', 'core.md'), 'utf8').trim();
     const modeFile = projectType === 'existing' ? 'existing-project.md' : 'new-project.md';
@@ -338,14 +377,14 @@ function renderProjectPolicy(projectType) {
     return `${MANAGED_BLOCK_START}\n${coreRules}\n\n${modeRules}\n${MANAGED_BLOCK_END}`;
 }
 
-function upsertManagedBlock(filePath, block) {
+function upsertDelimitedBlock(filePath, block, startMarker, endMarker) {
     let currentContent = '';
     if (fs.existsSync(filePath)) {
         currentContent = fs.readFileSync(filePath, 'utf8');
     }
 
-    const startIndex = currentContent.indexOf(MANAGED_BLOCK_START);
-    const endIndex = currentContent.indexOf(MANAGED_BLOCK_END);
+    const startIndex = currentContent.indexOf(startMarker);
+    const endIndex = currentContent.indexOf(endMarker);
     let nextContent;
 
     if (startIndex === -1 && endIndex === -1) {
@@ -353,7 +392,7 @@ function upsertManagedBlock(filePath, block) {
         nextContent = `${currentContent}${separator}${block}\n`;
     } else if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
         nextContent = `${currentContent.slice(0, startIndex)}${block}${currentContent.slice(
-            endIndex + MANAGED_BLOCK_END.length,
+            endIndex + endMarker.length,
         )}`;
         if (!nextContent.endsWith('\n')) {
             nextContent += '\n';
@@ -364,6 +403,25 @@ function upsertManagedBlock(filePath, block) {
 
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, nextContent, 'utf8');
+}
+
+function upsertManagedBlock(filePath, block) {
+    upsertDelimitedBlock(filePath, block, MANAGED_BLOCK_START, MANAGED_BLOCK_END);
+}
+
+function updateGitignore(projectRoot) {
+    const entries = [
+        '/.ai-core/',
+        '/.agents/rules/jobkim.md',
+        '/.agents/skills/',
+    ];
+    const block = `${GITIGNORE_BLOCK_START}\n${entries.join('\n')}\n${GITIGNORE_BLOCK_END}`;
+    upsertDelimitedBlock(
+        path.join(projectRoot, '.gitignore'),
+        block,
+        GITIGNORE_BLOCK_START,
+        GITIGNORE_BLOCK_END,
+    );
 }
 
 function inspectExistingProject(projectRoot) {
@@ -431,6 +489,7 @@ function installProjectPolicy(projectRoot, projectType, selectedEngines, existin
 }
 
 async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'existing') {
+    selectedEngines = parseSelectedEngines(selectedEngines.join(','));
     const sourcesRoot = path.join(projectRoot, '.ai-core', 'sources');
     fs.mkdirSync(sourcesRoot, { recursive: true });
 
@@ -441,15 +500,12 @@ async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'ex
     const skills = skillGroups.flat();
     validateUniqueSkillNames(skills);
 
-    if (!selectedEngines.includes('1') && !selectedEngines.includes('2')) {
-        throw new Error('활성화할 AI 엔진 번호로 1, 2 또는 1,2를 입력하세요.');
-    }
-
     const existingProfile = projectType === 'existing' ? inspectExistingProject(projectRoot) : null;
     const targetDirectory = path.join(projectRoot, '.agents', 'skills');
     fs.mkdirSync(targetDirectory, { recursive: true });
     const installedSkills = skills.filter((skill) => installSkill(skill, targetDirectory));
     removeStaleManagedSkills(targetDirectory, new Set(installedSkills.map((skill) => skill.name)));
+    updateGitignore(projectRoot);
     const policyTargets = installProjectPolicy(
         projectRoot,
         projectType,
@@ -465,12 +521,26 @@ async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'ex
     };
 }
 
-function ask(rl, question) {
-    return new Promise((resolve) => rl.question(question, resolve));
+function createQuestionReader(rl) {
+    const answers = rl[Symbol.asyncIterator]();
+    return async (question) => {
+        rl.output.write(question);
+        const { value, done } = await answers.next();
+        if (done) {
+            throw new Error('입력이 완료되기 전에 종료되었습니다.');
+        }
+        return value;
+    };
 }
 
-async function runCli() {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+async function runCli({
+    input = process.stdin,
+    output = process.stdout,
+    projectRoot = process.cwd(),
+    synchronize = synchronizeSkills,
+} = {}) {
+    const rl = readline.createInterface({ input, output });
+    const ask = createQuestionReader(rl);
     try {
         console.log('\n==================================================================');
         console.log('Universal AI-Agent Dev Initializer');
@@ -479,20 +549,16 @@ async function runCli() {
         console.log('1) 신규 프로젝트');
         console.log('2) 기존 프로젝트');
 
-        const projectAnswer = await ask(rl, '\n번호 입력 (1 또는 2): ');
-        const projectType =
-            projectAnswer.trim() === '1' ? 'new' : projectAnswer.trim() === '2' ? 'existing' : null;
-        if (!projectType) {
-            throw new Error('프로젝트 유형으로 1 또는 2를 입력하세요.');
-        }
+        const projectAnswer = await ask('\n번호 입력 (1 또는 2): ');
+        const projectType = parseProjectType(projectAnswer);
 
         console.log('\n활성화할 AI 엔진을 선택하세요 (복수 선택 가능).');
         console.log('1) Codex');
         console.log('2) Gemini/Antigravity');
 
-        const answer = await ask(rl, '\n번호 입력 (1, 2 또는 1,2): ');
-        const selectedEngines = [...new Set(answer.split(',').map((item) => item.trim()))];
-        const result = await synchronizeSkills(process.cwd(), selectedEngines, projectType);
+        const answer = await ask('\n번호 입력 (1, 2 또는 1,2): ');
+        const selectedEngines = parseSelectedEngines(answer);
+        const result = await synchronize(projectRoot, selectedEngines, projectType);
         console.log(
             `\n최신 스킬 ${result.skillCount}개와 프로젝트 정책 ${result.policyFiles}개를 적용했습니다.\n`,
         );
@@ -510,13 +576,19 @@ if (require.main === module) {
 
 module.exports = {
     assertSafeRelativePath,
+    copyDirectory,
+    createQuestionReader,
     findSkillDirectories,
     inspectExistingProject,
     installSkill,
     installProjectPolicy,
+    parseProjectType,
+    parseSelectedEngines,
     removeStaleManagedSkills,
     renderProjectPolicy,
+    runCli,
     synchronizeSkills,
+    updateGitignore,
     upsertManagedBlock,
     validateUniqueSkillNames,
 };
