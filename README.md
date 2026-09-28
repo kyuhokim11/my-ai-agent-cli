@@ -10,6 +10,8 @@ AI 개발 작업 원칙, 프로젝트 유형별 초기화 정책과 재사용 �
 - 사용자 지시는 검토 후 자체 규칙, 전략, 스킬 또는 초기화 정책의 적절한 단일 원천에 반영합니다.
 - 에이전트 모델이 발전하면 불필요해진 지침을 제거하고, 여전히 필요한 작업 원칙과 검증 기준을 남깁니다.
 
+이 프로젝트가 전체 AI 개발 시스템에서 맡는 위치, 책임 범위와 향후 프로젝트 분리·연계 원칙은 [AI 개발 시스템 전략과 이 프로젝트의 역할](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/system-strategy.md)을 참고하세요.
+
 ## 현재 지원 소스
 
 - [Ponytail](https://github.com/DietrichGebert/ponytail)
