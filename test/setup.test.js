@@ -134,3 +134,20 @@ test('선택한 엔진의 지침 파일만 생성한다', () => {
         assert.equal(fs.existsSync(path.join(tempDirectory, '.agents', 'rules', 'jobkim.md')), true);
     });
 });
+
+test('모든 엔진 지침에 공통 스킬 라우팅 정책을 생성한다', () => {
+    withTempDirectory((tempDirectory) => {
+        installProjectPolicy(tempDirectory, 'new', ['1', '2'], null);
+        const coreRules = fs.readFileSync(path.join(__dirname, '..', 'rules', 'core.md'), 'utf8').trim();
+
+        const policyFiles = [
+            path.join(tempDirectory, 'AGENTS.md'),
+            path.join(tempDirectory, 'GEMINI.md'),
+            path.join(tempDirectory, '.agents', 'rules', 'jobkim.md'),
+        ];
+        for (const policyFile of policyFiles) {
+            const content = fs.readFileSync(policyFile, 'utf8');
+            assert.equal(content.includes(coreRules), true);
+        }
+    });
+});
