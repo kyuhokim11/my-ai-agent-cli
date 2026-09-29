@@ -153,6 +153,18 @@ async function downloadSource(source, stagingRoot) {
 }
 
 function replaceDirectory(stagingRoot, sourceRoot) {
+    // 설치 대상 링크도 이 캐시를 가리키므로 교체 전에 관리 소유권을 보존한다.
+    if (fs.existsSync(sourceRoot)) {
+        for (const previousDirectory of findSkillDirectories(sourceRoot)) {
+            const marker = readManagedMarker(previousDirectory);
+            const nextDirectory = path.join(stagingRoot, path.relative(sourceRoot, previousDirectory));
+            if (marker?.managedBy === USER_AGENT &&
+                typeof marker.sourceId === 'string' &&
+                fs.existsSync(path.join(nextDirectory, 'SKILL.md'))) {
+                fs.writeFileSync(path.join(nextDirectory, MANAGED_MARKER), `${JSON.stringify(marker, null, 2)}\n`, 'utf8');
+            }
+        }
+    }
     const backupRoot = `${sourceRoot}.backup`;
     fs.rmSync(backupRoot, { recursive: true, force: true });
 
@@ -374,7 +386,8 @@ function renderProjectPolicy(projectType) {
     const coreRules = fs.readFileSync(path.join(__dirname, 'rules', 'core.md'), 'utf8').trim();
     const modeFile = projectType === 'existing' ? 'existing-project.md' : 'new-project.md';
     const modeRules = fs.readFileSync(path.join(__dirname, 'rules', modeFile), 'utf8').trim();
-    return `${MANAGED_BLOCK_START}\n${coreRules}\n\n${modeRules}\n${MANAGED_BLOCK_END}`;
+    const installationNote = '마지막으로 성공한 ai-init 적용 정보는 `.ai-core/install-info.json`에서 확인한다. 실패한 재실행의 부분 변경이나 외부 스킬 버전까지 보증하는 정보는 아니다.';
+    return `${MANAGED_BLOCK_START}\n${coreRules}\n\n${modeRules}\n\n${installationNote}\n${MANAGED_BLOCK_END}`;
 }
 
 function upsertDelimitedBlock(filePath, block, startMarker, endMarker) {
@@ -488,6 +501,25 @@ function installProjectPolicy(projectRoot, projectType, selectedEngines, existin
     return policyTargets;
 }
 
+function writeInstallInfo(projectRoot, projectType, selectedEngines) {
+    const destination = path.join(projectRoot, '.ai-core', 'install-info.json');
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    const temporaryPath = `${destination}.${crypto.randomUUID()}.tmp`;
+    const information = {
+        package: PACKAGE.name,
+        version: PACKAGE.version,
+        appliedAt: new Date().toISOString(),
+        projectType,
+        engines: selectedEngines.map((engine) => engine === '1' ? 'Codex' : 'Gemini/Antigravity'),
+    };
+    try {
+        fs.writeFileSync(temporaryPath, `${JSON.stringify(information, null, 2)}\n`, 'utf8');
+        fs.renameSync(temporaryPath, destination);
+    } finally {
+        fs.rmSync(temporaryPath, { force: true });
+    }
+}
+
 async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'existing') {
     selectedEngines = parseSelectedEngines(selectedEngines.join(','));
     const sourcesRoot = path.join(projectRoot, '.ai-core', 'sources');
@@ -512,7 +544,8 @@ async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'ex
         selectedEngines,
         existingProfile,
     );
-    console.log(`[설치 완료] 공통 Agent Skills: ${installedSkills.length}개`);
+    writeInstallInfo(projectRoot, projectType, selectedEngines);
+    console.log(`[설치 완료] ${PACKAGE.name} v${PACKAGE.version} 적용 완료 · 공통 Agent Skills: ${installedSkills.length}개`);
 
     return {
         skillCount: skills.length,
