@@ -262,6 +262,51 @@ Git과 npm은 역할이 다르므로 최신 상태가 항상 같은 시점에 �
 - 에이전트 성능이 발전하면 불필요한 지침을 제거하고 여전히 필요한 계약과 검증 기준만 유지한다.
 - 규칙과 스킬 변경은 가능한 경우 회귀 테스트 또는 재현 가능한 검증 사례와 함께 배포한다.
 
+## v1.2.0 릴리스 준비 기록
+
+상태: 배포 준비 중. 게시 완료 기록이 아니다.
+
+- 패키지: `@jobbykim/ai-init`, 공개 scoped package
+- 버전: `1.2.0` (사용자 변경 확인)
+- 범위: 기록·맥락 관리 정책과 자체 스킬, 성공 설치의 버전·적용 정보, 반복 동기화 시 관리 표식 보존
+- 기존 설치: 대상 프로젝트에서 다시 실행해야 새 규칙과 스킬 적용
+- 제한: 이미 관리 표식이 소실된 설치는 자동 복구하지 않음. 실제 에이전트 기록 행동은 별도 확인 필요
+- 릴리스 커밋·태그·완료일: 사용자 Git 작업과 공개 검증 후 기록
+
+배포 준비 검증(2026-09-29, Asia/Seoul):
+
+- `npm test`: 28개 통과, 신규/기존 × 엔진 3가지 선택 및 재설치 보존 검증
+- JavaScript 문법·Git diff 공백 검사: 통과
+- `npm publish --dry-run --registry=https://registry.npmjs.org/`: 통과, 공개 접근 및 배포 파일 13개 확인
+- npm 게시 버전 조회: `1.0.0`, `1.1.0` 확인, `1.2.0` 미게시
+- 외부 다운로드 포함 실사용 초기화, 실제 에이전트 행동, 게시 후 공개 `npx` 검증: 미수행
+- 타입체크·빌드·별도 린트: 해당 스크립트 없음
+
+검증된 준비 변경을 커밋·푸시한 뒤 아래 순서로 진행한다. 모두 `C:\dev\my-ai-agent-cli`에서 실행한다.
+
+```powershell
+npm test
+npm publish --dry-run --registry=https://registry.npmjs.org/
+git status --short --branch
+git rev-parse HEAD
+git tag -a v1.2.0 -m "release: v1.2.0"
+npm whoami --registry=https://registry.npmjs.org/
+npm view @jobbykim/ai-init@1.2.0 version --registry=https://registry.npmjs.org/
+npm publish --access public --registry=https://registry.npmjs.org/
+npm view @jobbykim/ai-init@1.2.0 name version --registry=https://registry.npmjs.org/
+```
+
+기존 `v1.2.0` 태그가 있으면 새로 만들거나 옮기지 말고 대상 커밋을 먼저 확인한다. 인증 실패 시 `npm login --registry=https://registry.npmjs.org/` 후 다시 확인한다. 게시 전 버전 조회에서 `E404`로 해당 버전 미게시를 확인한 경우에만 게시한다. 이미 버전이 조회되거나 다른 오류가 발생하면 중단한다. 테스트·미리보기·게시·게시 후 조회 중 하나라도 실패하면 이후 단계는 중단한다.
+
+게시 후 별도 테스트 프로젝트 루트에서 `npx @jobbykim/ai-init@1.2.0`을 실행하고 다음을 확인한다.
+
+- 선택한 엔진의 지침과 `jobkim-project-context` 스킬·참조 문서 설치
+- `.ai-core/install-info.json`의 버전 `1.2.0`, 선택 정보와 적용 시각
+- 재실행 시 관리 스킬 유지 및 기존 지침·작업 문서 보존
+- 에이전트가 기존 문서 안내를 따라 실제 경로를 사용하고 현재 단계·변화 이력을 적절히 기록
+
+공개 패키지 검증 완료 후 `git push origin v1.2.0`을 수행하고 결과를 사후 문서 커밋으로 남긴다. 일반 커밋과 푸시 절차는 아래 릴리스 절차를 따른다.
+
 ## 이후 릴리스 절차
 
 릴리스 준비와 검증은 Codex가 수행하고, 커밋·푸시·npm 인증·게시·태그 푸시는 사용자가 직접 수행한다. 모든 명령은 패키지 저장소 루트에서 실행한다.
