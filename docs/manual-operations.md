@@ -4,7 +4,7 @@
 
 ## 지금 확인할 곳
 
-- 이번 배포 범위와 남은 검증: [v1.3.0 준비 기록](#v130-릴리스-준비-기록)
+- 이번 릴리스 결과: [v1.3.0 릴리스 기록](#v130-릴리스-기록)
 - 커밋부터 게시까지 실행 순서: [릴리스 절차](#릴리스-절차)
 - Git과 npm을 맞춰야 하는 범위: [일치 기준](#git과-npm의-일치-기준)
 
@@ -135,28 +135,37 @@ Windows에서는 과거 공개 실행과 현재 자동 테스트를 확인했다
 
 ---
 
-## v1.3.0 릴리스 준비 기록
+## v1.3.0 릴리스 기록
 
-상태: 배포 준비 완료. 게시 완료 기록이 아니다.
+릴리스 완료일: 2026-09-30, Asia/Seoul
 
-- 패키지: `@jobbykim/ai-init`, 공개 scoped package
-- 버전: `1.3.0` (사용자 승인 완료)
-- 범위:
-  - 사용자 및 프로젝트별 커스텀 프롬프트 공간 분리 (`.agents/rules/project.md` 팀 공통, `.agents/rules/local.md` 개인 로컬)
-  - 개인 로컬 규칙(`.agents/rules/local.md`)의 `.gitignore` 자동 격리 및 재실행 시 100% 무손실 보존
-  - AI 에이전트 4단계 표준 프로세스 확립 (Step 1 분석 → Step 2 계획 및 승인 대기 → Step 3 점진적 구현 → Step 4 자가검증/Reflection)
-  - 규칙 우선순위 체계 확립 (개인 로컬 규칙 > 프로젝트 공통 규칙 > 코어 기본 가드레일)
-  - 계획 우선(제 2조)과 단일 즉시 변경(제 6조)의 조화로 불필요한 핑퐁 방지 및 생산성 유지
-  - CLI 설치 완료 시 사용자 커스텀 규칙 경로 안내 콘솔 출력
-- 기존 설치: 대상 프로젝트에서 다시 실행하면 기존 내용은 보존되며 새 커스텀 규칙 템플릿과 갱신된 가드레일이 적용됨
+### 배포 정보
 
-배포 준비 검증(2026-09-30, Asia/Seoul):
+- npm 패키지: `@jobbykim/ai-init`
+- npm 버전: `1.3.0`
+- npm dist-tag: `latest`
+- 공개 범위: public scoped package
+- npm 페이지: `https://www.npmjs.com/package/@jobbykim/ai-init/v/1.3.0`
+- GitHub 저장소: `https://github.com/kyuhokim11/my-ai-agent-cli`
+- Git 태그: `v1.3.0`
+- 릴리스 커밋 SHA: `703b762ab5fca310604f039a3359ea1decdbbbdd` (`feat: 사용자 커스텀 규칙 공간 분리 및 Plan-and-Solve 워크플로우 도입 (v1.3.0)`)
 
-- `npm test`: 30개 전체 통과 (커스텀 템플릿 생성/보존, gitignore 격리, 엔진별 지침 생성 포함)
-- `npm publish --dry-run --registry=https://registry.npmjs.org/`: 통과, 배포 파일 13개 확인
-- npm 게시 버전 조회: `1.0.0`, `1.1.0`, `1.2.0` 확인, `1.3.0` 미게시 확인
+### 릴리스 범위
 
-다음은 [릴리스 절차](#릴리스-절차)를 순서대로 실행한다.
+- 사용자 및 프로젝트별 커스텀 프롬프트 공간 분리 (`.agents/rules/project.md` 팀 공통, `.agents/rules/local.md` 개인 로컬)
+- 개인 로컬 규칙(`.agents/rules/local.md`)의 `.gitignore` 자동 격리 및 재실행 시 100% 무손실 보존
+- AI 에이전트 4단계 표준 프로세스 확립 (Step 1 분석 → Step 2 계획 및 승인 대기 → Step 3 점진적 구현 → Step 4 자가검증/Reflection)
+- 규칙 우선순위 체계 확립 (개인 로컬 규칙 > 프로젝트 공통 규칙 > 코어 기본 가드레일)
+- 계획 우선(제 2조)과 단일 즉시 변경(제 6조)의 조화로 불필요한 핑퐁 방지 및 생산성 유지
+- `LOCAL_RULE_TEMPLATE` 정돈: 인프라/포트 설정 혼선을 제거하고 순수 개인 작업 스타일 및 답변 규칙으로 집중
+- CLI 설치 완료 시 사용자 커스텀 규칙 경로 안내 콘솔 출력
+
+### 검증 결과
+
+- `npm test`: 30개 전체 통과
+- `npm publish --dry-run`: 통과, 배포 파일 13개 확인
+- npm 공개 게시 확인: `latest` 태그가 `1.3.0` 가리킴 확인
+- GitHub 원격 저장소 `main` 및 `v1.3.0` 태그 푸시 완료
 
 ## 릴리스 절차
 
