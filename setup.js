@@ -16,6 +16,49 @@ const GITIGNORE_BLOCK_START = '# ai-init:managed:start';
 const GITIGNORE_BLOCK_END = '# ai-init:managed:end';
 const REQUEST_TIMEOUT_MS = 30_000;
 
+const PROJECT_RULE_TEMPLATE = `# Project Custom Rules
+<!--
+  [용도 및 목적]
+  이 파일은 이 프로젝트에 참여하는 팀원과 AI 에이전트가 공통으로 준수해야 할 프로젝트 전용 프롬프트 공간입니다.
+
+  [특징]
+  1. Git에 커밋되어 팀원들과 공유되므로, 프로젝트의 기술 스택, 코딩 컨벤션, 아키텍처 원칙을 기록합니다.
+  2. ai-init 재실행이나 버전 업데이트 시에도 기존 내용이 절대 덮어써지지 않고 안전하게 보존됩니다.
+  3. AI 에이전트는 이 파일의 지침을 기본 가드레일보다 우선하여 적용합니다.
+-->
+
+## 1. 기술 스택 및 아키텍처
+- 언어 및 런타임: (예: Node.js 20+, TypeScript 등)
+- 주요 프레임워크/라이브러리: (예: React, Next.js, Express, Spring Boot 등)
+
+## 2. 프로젝트 공통 코딩 컨벤션
+- 네이밍 및 코드 스타일: (예: 함수형 컴포넌트 선호, 디렉터리 구조 등)
+- 라이브러리 추가 정책: 새로운 외부 패키지 설치 시 반드시 사유와 대안을 설명하고 승인 대기
+
+## 3. 테스트 및 품질 기준
+- 핵심 비즈니스 로직에는 단위 테스트를 필수 작성한다.
+`;
+
+const LOCAL_RULE_TEMPLATE = `# Local / Personal Rules
+<!--
+  [용도 및 목적]
+  이 파일은 개발자 개인의 취향, 작업 스타일 및 AI 답변 방식을 정의하는 개인 전용 프롬프트 공간입니다.
+
+  [특징]
+  1. .gitignore에 자동 등록되어 Git에 커밋되지 않으므로 팀원에게 영향을 주지 않고 내 로컬 PC에서만 유지됩니다.
+  2. ai-init 재실행이나 버전 업데이트 시에도 기존 내용이 절대 덮어써지지 않고 안전하게 보존됩니다.
+  3. AI 에이전트는 이 파일의 지침을 기본 규칙보다 우선하여 따릅니다.
+-->
+
+## 1. 개인 작업 및 답변 스타일
+- 답변은 불필요한 미사여구를 생략하고 간결한 한국어로 핵심 위주로 보고할 것.
+- 수정 계획을 제시할 때 변경 이유와 영향 범위를 명확하게 요약할 것.
+
+## 2. 개인 선호 작업 방식
+- 터미널 명령어 제안 시 선호하는 셸(예: PowerShell, bash 등) 환경에 맞출 것.
+- 커밋 메시지나 PR 설명 초안을 제안할 때는 간결한 컨벤셔널 커밋 형식을 따를 것.
+`;
+
 function request(url, responseType = 'text', redirectCount = 0) {
     return new Promise((resolve, reject) => {
         const requestOptions = {
@@ -426,6 +469,7 @@ function updateGitignore(projectRoot) {
     const entries = [
         '/.ai-core/',
         '/.agents/rules/jobkim.md',
+        '/.agents/rules/local.md',
         '/.agents/skills/',
     ];
     const block = `${GITIGNORE_BLOCK_START}\n${entries.join('\n')}\n${GITIGNORE_BLOCK_END}`;
@@ -437,11 +481,29 @@ function updateGitignore(projectRoot) {
     );
 }
 
+function ensureCustomRuleTemplates(projectRoot) {
+    const rulesDirectory = path.join(projectRoot, '.agents', 'rules');
+    fs.mkdirSync(rulesDirectory, { recursive: true });
+
+    const targets = [
+        { filePath: path.join(rulesDirectory, 'project.md'), template: PROJECT_RULE_TEMPLATE },
+        { filePath: path.join(rulesDirectory, 'local.md'), template: LOCAL_RULE_TEMPLATE },
+    ];
+
+    for (const { filePath, template } of targets) {
+        if (!fs.existsSync(filePath)) {
+            fs.writeFileSync(filePath, template, 'utf8');
+        }
+    }
+}
+
 function inspectExistingProject(projectRoot) {
     const instructionCandidates = [
         '.codex/Codex.md',
         'AGENTS.md',
         'AGENTS.override.md',
+        '.agents/rules/project.md',
+        '.agents/rules/local.md',
         'GEMINI.md',
         'CLAUDE.md',
         'README.md',
@@ -537,6 +599,7 @@ async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'ex
     fs.mkdirSync(targetDirectory, { recursive: true });
     const installedSkills = skills.filter((skill) => installSkill(skill, targetDirectory));
     removeStaleManagedSkills(targetDirectory, new Set(installedSkills.map((skill) => skill.name)));
+    ensureCustomRuleTemplates(projectRoot);
     updateGitignore(projectRoot);
     const policyTargets = installProjectPolicy(
         projectRoot,
@@ -546,6 +609,7 @@ async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'ex
     );
     writeInstallInfo(projectRoot, projectType, selectedEngines);
     console.log(`[설치 완료] ${PACKAGE.name} v${PACKAGE.version} 적용 완료 · 공통 Agent Skills: ${installedSkills.length}개`);
+    console.log('       사용자 커스텀 규칙: .agents/rules/project.md (팀 공통) · .agents/rules/local.md (개인 로컬/Git제외)');
 
     return {
         skillCount: skills.length,
@@ -611,6 +675,7 @@ module.exports = {
     assertSafeRelativePath,
     copyDirectory,
     createQuestionReader,
+    ensureCustomRuleTemplates,
     findSkillDirectories,
     inspectExistingProject,
     installSkill,

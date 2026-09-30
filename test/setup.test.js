@@ -10,6 +10,7 @@ const {
     assertSafeRelativePath,
     copyDirectory,
     createQuestionReader,
+    ensureCustomRuleTemplates,
     findSkillDirectories,
     inspectExistingProject,
     installSkill,
@@ -197,7 +198,9 @@ test('기존 gitignore를 보존하고 ai-init 관리 항목만 갱신한다', (
         assert.match(content, /node_modules\//);
         assert.match(content, /\/\.ai-core\//);
         assert.match(content, /\/\.agents\/rules\/jobkim\.md/);
+        assert.match(content, /\/\.agents\/rules\/local\.md/);
         assert.match(content, /\/\.agents\/skills\//);
+        assert.doesNotMatch(content, /\/\.agents\/rules\/project\.md/);
         assert.doesNotMatch(content, /AGENTS\.md|GEMINI\.md/);
         assert.equal(content.match(/# ai-init:managed:start/g).length, 1);
     });
@@ -264,5 +267,41 @@ test('모든 엔진 지침에 공통 스킬 라우팅 정책을 생성한다', (
             const content = fs.readFileSync(policyFile, 'utf8');
             assert.equal(content.includes(coreRules), true);
         }
+    });
+});
+
+test('커스텀 규칙 템플릿을 생성하고 기존 사용자 커스텀 규칙은 보존한다', () => {
+    withTempDirectory((tempDirectory) => {
+        const projectRulePath = path.join(tempDirectory, '.agents', 'rules', 'project.md');
+        const localRulePath = path.join(tempDirectory, '.agents', 'rules', 'local.md');
+
+        // 최초 실행: 템플릿 생성 확인
+        ensureCustomRuleTemplates(tempDirectory);
+        assert.equal(fs.existsSync(projectRulePath), true);
+        assert.equal(fs.existsSync(localRulePath), true);
+        assert.match(fs.readFileSync(projectRulePath, 'utf8'), /# Project Custom Rules/);
+        assert.match(fs.readFileSync(localRulePath, 'utf8'), /# Local \/ Personal Rules/);
+
+        // 사용자가 커스텀 내용 작성
+        fs.writeFileSync(projectRulePath, '# Custom Project Rules by User', 'utf8');
+        fs.writeFileSync(localRulePath, '# Custom Local Rules by User', 'utf8');
+
+        // 재실행: 사용자 작성 내용 보존 확인
+        ensureCustomRuleTemplates(tempDirectory);
+        assert.equal(fs.readFileSync(projectRulePath, 'utf8'), '# Custom Project Rules by User');
+        assert.equal(fs.readFileSync(localRulePath, 'utf8'), '# Custom Local Rules by User');
+    });
+});
+
+test('기존 프로젝트의 커스텀 규칙 파일을 조사 대상 지침으로 포함한다', () => {
+    withTempDirectory((tempDirectory) => {
+        const rulesDirectory = path.join(tempDirectory, '.agents', 'rules');
+        fs.mkdirSync(rulesDirectory, { recursive: true });
+        fs.writeFileSync(path.join(rulesDirectory, 'project.md'), '# project');
+        fs.writeFileSync(path.join(rulesDirectory, 'local.md'), '# local');
+
+        const profile = inspectExistingProject(tempDirectory);
+        assert.equal(profile.instructionsToRead.includes('.agents/rules/project.md'), true);
+        assert.equal(profile.instructionsToRead.includes('.agents/rules/local.md'), true);
     });
 });

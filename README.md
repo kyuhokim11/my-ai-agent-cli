@@ -37,12 +37,21 @@ npx @jobbykim/ai-init
 |---|---|
 | `AGENTS.md` | Codex 작업 지침 |
 | `GEMINI.md`, `.agents/rules/jobkim.md` | Gemini CLI와 Antigravity 작업 지침 |
+| `.agents/rules/project.md` | 프로젝트/팀 공통 커스텀 규칙 (Git 추적 권장) |
+| `.agents/rules/local.md` | 개발자 개인 로컬 커스텀 규칙 (Git 제외) |
 | `.agents/skills/` | 공통 스킬 |
 | `.ai-core/` | 스킬 원본과 설치 정보 |
 
 선택한 엔진의 지침만 생성합니다. 기존 지침은 보존하고 ai-init이 추가한 구간을 갱신합니다. 같은 이름의 사용자 스킬이 있으면 덮어쓰지 않고 건너뜁니다.
 
-`.gitignore`에는 `.ai-core/`, `.agents/rules/jobkim.md`, `.agents/skills/` 전체를 제외하도록 추가합니다. `AGENTS.md`와 `GEMINI.md`는 Git 제외 대상이 아닙니다. 이미 Git에서 추적 중인 파일은 이 설정만으로 추적이 해제되지 않습니다.
+### 사용자 및 프로젝트 커스텀 규칙
+
+`.agents/rules/` 디렉터리에 사용자 정의 프롬프트를 위한 두 개의 파일이 함께 제공됩니다:
+- `project.md`: 팀 공통 코딩 컨벤션, 기술 스택, 아키텍처 규칙 등을 작성하며 Git에 커밋하여 팀원과 공유합니다.
+- `local.md`: 개발자 개인의 취향, 답변 언어/어조, 로컬 환경(포트 등)을 작성하며 `.gitignore`에 등록되어 로컬 머신에만 유지됩니다.
+- 이 파일들은 이미 존재할 경우 `ai-init`을 재실행해도 절대 덮어쓰지 않고 기존 내용을 보존하며, 작업 시 기본 규칙보다 우선하여 적용됩니다.
+
+`.gitignore`에는 `.ai-core/`, `.agents/rules/jobkim.md`, `.agents/rules/local.md`, `.agents/skills/` 전체를 제외하도록 추가합니다. `AGENTS.md`, `GEMINI.md`, `.agents/rules/project.md`는 Git 제외 대상이 아닙니다. 이미 Git에서 추적 중인 파일은 이 설정만으로 추적이 해제되지 않습니다.
 
 ## 업데이트와 버전 확인
 

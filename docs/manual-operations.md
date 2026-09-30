@@ -4,7 +4,7 @@
 
 ## 지금 확인할 곳
 
-- 이번 배포 범위와 남은 검증: [v1.2.0 준비 기록](#v120-릴리스-준비-기록)
+- 이번 배포 범위와 남은 검증: [v1.3.0 준비 기록](#v130-릴리스-준비-기록)
 - 커밋부터 게시까지 실행 순서: [릴리스 절차](#릴리스-절차)
 - Git과 npm을 맞춰야 하는 범위: [일치 기준](#git과-npm의-일치-기준)
 
@@ -123,33 +123,44 @@ Windows에서는 과거 공개 실행과 현재 자동 테스트를 확인했다
 
 공통 규칙 개선과 다른 프로젝트로의 분리 방향은 [시스템 전략](system-strategy.md)에서 관리한다.
 
-## v1.2.0 릴리스 준비 기록
+## v1.2.0 릴리스 기록
 
-상태: 배포 준비 중. 게시 완료 기록이 아니다.
+2026-09-30 레지스트리 조회에서 `1.2.0` 게시와 `latest`를 확인했다. 로컬 `v1.2.0` 태그가 존재하며 배포가 완료되었다.
+
+### 릴리스 범위
+
+- 기록·맥락 관리 정책과 자체 스킬(`jobkim-project-context`, `jobkim-project-intake`)
+- 성공한 설치의 버전과 적용 정보 기록(`.ai-core/install-info.json`)
+- 반복 동기화 시 관리 표식 보존 및 upstream 제거 스킬 정리
+
+---
+
+## v1.3.0 릴리스 준비 기록
+
+상태: 배포 준비 완료. 게시 완료 기록이 아니다.
 
 - 패키지: `@jobbykim/ai-init`, 공개 scoped package
-- 버전: `1.2.0` (사용자 변경 확인)
-- 범위: 기록·맥락 관리 정책과 자체 스킬, 성공 설치의 버전·적용 정보, 반복 동기화 시 관리 표식 보존
-- 기존 설치: 대상 프로젝트에서 다시 실행해야 새 규칙과 스킬 적용
-- 제한: 이미 관리 표식이 소실된 설치는 자동 복구하지 않음. 실제 에이전트 기록 행동은 별도 확인 필요
-- 릴리스 커밋·태그·완료일: 사용자 Git 작업과 공개 검증 후 기록
+- 버전: `1.3.0` (사용자 승인 완료)
+- 범위:
+  - 사용자 및 프로젝트별 커스텀 프롬프트 공간 분리 (`.agents/rules/project.md` 팀 공통, `.agents/rules/local.md` 개인 로컬)
+  - 개인 로컬 규칙(`.agents/rules/local.md`)의 `.gitignore` 자동 격리 및 재실행 시 100% 무손실 보존
+  - AI 에이전트 4단계 표준 프로세스 확립 (Step 1 분석 → Step 2 계획 및 승인 대기 → Step 3 점진적 구현 → Step 4 자가검증/Reflection)
+  - 규칙 우선순위 체계 확립 (개인 로컬 규칙 > 프로젝트 공통 규칙 > 코어 기본 가드레일)
+  - 계획 우선(제 2조)과 단일 즉시 변경(제 6조)의 조화로 불필요한 핑퐁 방지 및 생산성 유지
+  - CLI 설치 완료 시 사용자 커스텀 규칙 경로 안내 콘솔 출력
+- 기존 설치: 대상 프로젝트에서 다시 실행하면 기존 내용은 보존되며 새 커스텀 규칙 템플릿과 갱신된 가드레일이 적용됨
 
-배포 준비 검증(2026-09-29, Asia/Seoul):
+배포 준비 검증(2026-09-30, Asia/Seoul):
 
-- `npm test`: 28개 통과, 신규/기존 × 엔진 3가지 선택 및 재설치 보존 검증
-- JavaScript 문법·Git diff 공백 검사: 통과
-- `npm publish --dry-run --registry=https://registry.npmjs.org/`: 통과, 공개 접근 및 배포 파일 13개 확인
-- npm 게시 버전 조회: `1.0.0`, `1.1.0` 확인, `1.2.0` 미게시
-- 외부 다운로드 포함 실사용 초기화, 실제 에이전트 행동, 게시 후 공개 `npx` 검증: 미수행
-- 타입체크·빌드·별도 린트: 해당 스크립트 없음
+- `npm test`: 30개 전체 통과 (커스텀 템플릿 생성/보존, gitignore 격리, 엔진별 지침 생성 포함)
+- `npm publish --dry-run --registry=https://registry.npmjs.org/`: 통과, 배포 파일 13개 확인
+- npm 게시 버전 조회: `1.0.0`, `1.1.0`, `1.2.0` 확인, `1.3.0` 미게시 확인
 
-README와 링크된 문서 정리도 이번 변경 범위에 포함한다. README는 npm에도 들어가며, `docs/` 문서는 GitHub에서 제공한다.
-
-다음은 [릴리스 절차](#릴리스-절차)를 순서대로 실행한다. 게시 완료로 바꾸는 것은 레지스트리와 실제 실행 결과를 확인한 뒤다.
+다음은 [릴리스 절차](#릴리스-절차)를 순서대로 실행한다.
 
 ## 릴리스 절차
 
-명령은 한 단계씩 실행하고 결과를 확인한 뒤 다음 단계로 넘어간다. 기본 위치는 `C:\dev\my-ai-agent-cli`다. 아래는 `1.2.0` 기준이며 다음 배포에서는 버전과 태그명을 바꾼다.
+명령은 한 단계씩 실행하고 결과를 확인한 뒤 다음 단계로 넘어간다. 기본 위치는 `C:\dev\my-ai-agent-cli`다. 아래는 `1.3.0` 기준이다.
 
 ### 1. 사전 조건 확인
 
@@ -223,20 +234,20 @@ git status --short --branch
 ### 5. 로컬 태그
 
 ```powershell
-git tag --list v1.2.0
+git tag --list v1.3.0
 ```
 
-없을 때만 검증한 HEAD에 태그를 만든다. 이미 있으면 `git rev-list -n 1 v1.2.0`으로 대상부터 확인하고 임의로 옮기지 않는다.
+없을 때만 검증한 HEAD에 태그를 만든다. 이미 있으면 `git rev-list -n 1 v1.3.0`으로 대상부터 확인하고 임의로 옮기지 않는다.
 
 ```powershell
-git tag -a v1.2.0 -m "release: v1.2.0"
-git rev-list -n 1 v1.2.0
+git tag -a v1.3.0 -m "release: v1.3.0"
+git rev-list -n 1 v1.3.0
 git rev-parse HEAD
 ```
 
 두 SHA가 같아야 한다. 전체 SHA는 게시 후 결과 기록에 남기고, 태그는 공개 패키지 검증이 끝날 때 푸시한다.
 
-위임 예시: `현재 HEAD에 v1.2.0 로컬 태그만 만들고 SHA를 확인해줘. 태그 푸시는 하지 마.`
+위임 예시: `현재 HEAD에 v1.3.0 로컬 태그만 만들고 SHA를 확인해줘. 태그 푸시는 하지 마.`
 
 ### 6. npm 인증과 게시
 
@@ -244,7 +255,7 @@ git rev-parse HEAD
 
 ```powershell
 npm whoami --registry=https://registry.npmjs.org/
-npm view @jobbykim/ai-init@1.2.0 version --registry=https://registry.npmjs.org/
+npm view @jobbykim/ai-init@1.3.0 version --registry=https://registry.npmjs.org/
 ```
 
 계정이 `jobbykim`인지 확인한다. 인증 실패 시 `npm login --registry=https://registry.npmjs.org/` 후 다시 확인한다. 미게시 버전 조회의 `E404` 외 오류는 먼저 해결한다.
@@ -258,7 +269,7 @@ npm publish --access public --registry=https://registry.npmjs.org/
 게시 성공 여부가 불분명하면 반복 게시하지 말고 먼저 조회한다.
 
 ```powershell
-npm view @jobbykim/ai-init@1.2.0 name version --registry=https://registry.npmjs.org/
+npm view @jobbykim/ai-init@1.3.0 name version --registry=https://registry.npmjs.org/
 npm view @jobbykim/ai-init dist-tags --json --registry=https://registry.npmjs.org/
 ```
 
@@ -267,7 +278,7 @@ npm view @jobbykim/ai-init dist-tags --json --registry=https://registry.npmjs.or
 저장소 밖의 신규·기존 테스트 프로젝트 루트에서 각각 실행한다.
 
 ```powershell
-npx @jobbykim/ai-init@1.2.0
+npx @jobbykim/ai-init@1.3.0
 Get-Content .ai-core/install-info.json
 ```
 
@@ -280,10 +291,10 @@ Get-Content .ai-core/install-info.json
 공개 패키지 검증이 모두 끝나면 사용자가 태그를 푸시한다.
 
 ```powershell
-git push origin v1.2.0
+git push origin v1.3.0
 ```
 
-위임 예시: `공개 검증 결과를 확인하고 기존 v1.2.0 태그만 푸시해줘.`
+위임 예시: `공개 검증 결과를 확인하고 기존 v1.3.0 태그만 푸시해줘.`
 
 npm 게시가 실패하면 태그는 푸시하지 않는다. 소스를 수정했다면 재검증과 커밋을 먼저 진행하고 기존 로컬 태그의 대상을 확인한다. 이미 게시한 버전은 새 버전으로 수정 배포한다.
 
