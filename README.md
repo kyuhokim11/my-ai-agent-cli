@@ -1,6 +1,6 @@
 # ai-init
 
-AI 에이전트로 개발할 때 사용할 작업 규칙과 스킬을 프로젝트에 설치하는 CLI입니다. 새 컴퓨터나 다른 프로젝트에서도 같은 개발 방식을 쓰려고 만들었습니다. Codex, Gemini CLI, Antigravity에 적용할 수 있습니다.
+사람의 설계 의도와 프로젝트 맥락을 AI에게 전달하고, 분석 → 설계 → 점진적 구현 → 검증으로 기존 시스템을 안전하게 개선하도록 작업 규칙과 스킬을 설치하는 CLI입니다. 새 컴퓨터나 다른 프로젝트에서도 같은 개발 방식을 쓰려고 만들었습니다. Codex, Gemini CLI, Antigravity에 적용할 수 있습니다. 목적과 판단 기준은 [시스템 전략](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/system-strategy.md)에 정리합니다.
 
 ## 무엇을 설정하나요?
 
@@ -50,6 +50,8 @@ npx @jobbykim/ai-init
 - `project.md`: 팀 공통 코딩 컨벤션, 기술 스택, 아키텍처 규칙 등을 작성하며 Git에 커밋하여 팀원과 공유합니다.
 - `local.md`: 개발자 개인의 취향, 답변 언어/어조, 로컬 환경(포트 등)을 작성하며 `.gitignore`에 등록되어 로컬 머신에만 유지됩니다.
 - 이 파일들은 이미 존재할 경우 `ai-init`을 재실행해도 절대 덮어쓰지 않고 기존 내용을 보존하며, 작업 시 기본 규칙보다 우선하여 적용됩니다.
+
+`project.md`에는 목적·성공 조건, 모듈 책임, 유지할 계약, 검증 명령과 ADR 원본 링크를 기록합니다. 3D·디자인 시스템 등 분야별 기준은 해당 프로젝트에 필요한 항목만 선택합니다. `local.md`에는 실제 OS·셸과 소스·외부 에셋 경로를 기록하며, 인증 정보는 넣지 않습니다. 새 템플릿은 신규 파일에만 적용되므로 기존 파일은 필요한 항목만 직접 보완합니다. 적용 예시는 [프로젝트별 기준](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/system-strategy.md#프로젝트별-기준)을 참고하세요.
 
 `.gitignore`에는 `.ai-core/`, `.agents/rules/jobkim.md`, `.agents/rules/local.md`, `.agents/skills/` 전체를 제외하도록 추가합니다. `AGENTS.md`, `GEMINI.md`, `.agents/rules/project.md`는 Git 제외 대상이 아닙니다. 이미 Git에서 추적 중인 파일은 이 설정만으로 추적이 해제되지 않습니다.
 
