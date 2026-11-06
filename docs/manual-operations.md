@@ -13,6 +13,8 @@
 
 규칙이나 템플릿을 수정한 로컬 소스는 게시된 패키지와 구분한다. 기존 커스텀 규칙은 재실행해도 보존되므로 새 템플릿 항목은 필요한 부분만 직접 보완한다. 아래 과거 릴리스 결과를 현재 변경의 검증 결과로 취급하지 않는다.
 
+README는 기능·설치·사용·업데이트 안내를 중심으로 유지한다. 특정 버전의 게시 여부·확인 날짜·로컬 배포 대기 상태는 넣지 않으며, 배포 이력과 검증 결과는 이 문서에 남긴다.
+
 코드·문서 수정과 검증은 에이전트가 준비한다. Git 스테이징·커밋·푸시·태그, npm 인증·게시, 패키지 삭제·접근 권한 변경과 운영 배포는 사용자가 직접 수행한다. 특정 단계만 일회성으로 맡길 수 있으며, 그 권한은 다음 단계로 이어지지 않는다. 에이전트는 목적·범위·대상 파일과 검증 방법을 먼저 제시한다.
 
 npm 계정과 scope는 `jobbykim`, 저자는 `jobkim`, GitHub 소유자는 `kyuhokim11`이다. 비밀번호·토큰·2FA 코드와 복구 코드는 기록하지 않는다.
@@ -85,7 +87,7 @@ npm 계정과 scope는 `jobbykim`, 저자는 `jobkim`, GitHub 소유자는 `kyuh
 | tarball 설치·재설치 | 압축을 푼 실제 패키지로 신규/기존 × 엔진 3가지의 6개 조합을 각각 두 번 실행. 관리 구간 교체, 사용자 지침 앞뒤·팀/개인 규칙·작업 기록 보존, `install-info.json`의 `1.4.0` 확인 |
 | 문서 참조 | README·docs의 내부 링크 대상과 제목 앵커 검사 통과 |
 
-패키지 SHA-1: `5dd201196f55306c43e2dc4f00677bbb62be2523`. 이 값은 위 준비 소스를 패키징한 결과이며 npm 게시 확인값은 아니다. tarball 설치 검증에서는 외부 다운로드 목록을 테스트 프로세스 메모리에서 비워 자체 번들·정책·설치 정보 경로만 실행했다. 외부 스킬 실시간 다운로드와 공개 `npx` 검증은 이번 tarball 확인에 포함되지 않는다. 임시 산출물은 저장소에 추가하지 않았다.
+준비 시점 패키지 SHA-1: `5dd201196f55306c43e2dc4f00677bbb62be2523`. 이 값은 README 정리 전 소스의 패키징 결과이며 npm 게시 확인값은 아니다. 게시할 때는 README 정리까지 포함한 최신 소스를 다시 검증·패키징한다. tarball 설치 검증에서는 외부 다운로드 목록을 테스트 프로세스 메모리에서 비워 자체 번들·정책·설치 정보 경로만 실행했다. 외부 스킬 실시간 다운로드와 공개 `npx` 검증은 이번 tarball 확인에 포함되지 않는다. 임시 산출물은 저장소에 추가하지 않았다.
 
 스킬의 `quick_validate.py`는 `PyYAML` 미설치로 실패했다. 새 의존성 설치 없이 단순 frontmatter·이름·설명·참조 파일 검사를 수행해 통과했으며 전용 검증기 통과로 보고하지 않는다.
 
@@ -108,6 +110,7 @@ npm 계정과 scope는 `jobbykim`, 저자는 `jobkim`, GitHub 소유자는 `kyuh
 | 2026-11-06 Asia/Seoul | 버전 보완 | 공개 태그·npm 대조, 소스 `1.4.0` 갱신, 상세·전환·배포 준비 기록 |
 | 2026-11-06 Asia/Seoul | 배포 준비 검증 | `1.4.0` 테스트 30개, 실제 tarball 13개 파일·소스 일치, 6개 조합 설치·재설치, 문서 링크·앵커 검사 통과 |
 | 2026-11-06 Asia/Seoul | 로컬 버전관리 | 위 소스 커밋에 검증된 13개 파일을 보존하고 SHA 감사 기록을 후속 문서 커밋으로 남김. 원격 푸시·태그·npm 게시는 미수행 |
+| 2026-11-06 Asia/Seoul | 게시 전 문서 정리 | README에서 일시적인 게시 상태·날짜·로컬 경로 제거, 업데이트 안내 일반화. 게시 절차의 대상 파일·커밋 예시를 남은 문서 수정에 맞춤. 커밋·게시 명령은 사용자가 직접 실행 |
 
 ## v1.0.0 릴리스 기록
 
@@ -309,10 +312,10 @@ npm publish --dry-run --registry=https://registry.npmjs.org/
 
 ### 4. 커밋과 브랜치 푸시
 
-에이전트가 제시한 대상 파일만 스테이징한다. 아래 `git add`는 이번 1.4.0 준비 범위다. 다른 배포에서는 해당 변경 파일 목록으로 바꾼다.
+에이전트가 제시한 대상 파일만 스테이징한다. 정책 변경과 버전 `1.4.0`은 이미 커밋되어 있으며, 아래는 게시 전에 남은 README·게시 절차 문서 수정만 포함한다. 다른 배포에서는 실제 변경 파일 목록으로 바꾼다.
 
 ```powershell
-git add package.json setup.js rules/core.md rules/new-project.md rules/existing-project.md bundled-skills/jobkim-project-intake/SKILL.md bundled-skills/jobkim-project-context/SKILL.md bundled-skills/jobkim-project-context/references/records.md test/context-policy.test.js README.md docs/manual-operations.md docs/project-context-policy-design.md docs/system-strategy.md
+git add README.md docs/manual-operations.md
 git diff --cached --name-only
 git diff --cached --check
 git diff --cached
@@ -321,7 +324,7 @@ git diff --cached
 예상 파일만 포함됐는지 확인한 뒤 커밋한다. 메시지는 영어 유형과 한글 설명으로 쓴다.
 
 ```powershell
-git commit -m "feat: 계획과 피드백 중심의 AI 협업 정책 개선 (v1.4.0)"
+git commit -m "docs: README 사용 안내와 npm 게시 절차 정리"
 git log -1 --oneline
 git rev-parse HEAD
 git status --short
@@ -404,4 +407,4 @@ git push origin v1.4.0
 
 npm 게시가 실패하면 태그는 푸시하지 않는다. 소스를 수정했다면 재검증과 커밋을 먼저 진행하고 기존 로컬 태그의 대상을 확인한다. 이미 게시한 버전은 새 버전으로 수정 배포한다.
 
-릴리스가 완료되면 Codex가 이 문서에 버전, 날짜, 전체 커밋 SHA, 태그, npm 조회 결과, 공개 `npx` 검증과 남은 제한을 기록한다. 사용자는 이 최종 기록을 별도의 사후 문서 커밋으로 커밋하고 푸시한다. 따라서 릴리스 태그는 검증된 배포 소스를 가리키며, 최종 결과 기록 커밋은 의도적으로 그 태그 다음에 위치한다.
+릴리스가 완료되면 이 문서에 버전, 날짜, 전체 커밋 SHA, 태그, npm 조회 결과, 공개 `npx` 검증과 남은 제한을 기록한다. 완료된 결과를 제공받거나 직접 확인한 항목만 완료로 표시한다. 사용자는 이 최종 기록을 별도의 사후 문서 커밋으로 커밋하고 푸시한다. 따라서 릴리스 태그는 검증된 배포 소스를 가리키며, 최종 결과 기록 커밋은 의도적으로 그 태그 다음에 위치한다. README는 게시 상태 갱신 목적으로 다시 수정하지 않는다.
