@@ -18,6 +18,11 @@ for (const projectType of ['new', 'existing']) {
                 const sources = path.join(root, '.ai-core', 'sources', 'jobkim');
                 const target = path.join(root, '.agents', 'skills');
                 const customRecord = path.join(root, 'project-notes', 'active.md');
+                const customRules = ['project.md', 'local.md'].map((file) => path.join(root, '.agents', 'rules', file));
+                fs.mkdirSync(path.dirname(customRules[0]), { recursive: true });
+                for (const file of customRules) {
+                    fs.writeFileSync(file, `# 사용자 정책: ${path.basename(file)}\n계획 변경은 피드백 후 진행\n`);
+                }
                 fs.mkdirSync(path.dirname(customRecord), { recursive: true });
                 fs.writeFileSync(customRecord, '# 사용자 작업\n검증 대기\n');
                 const targets = [
@@ -26,7 +31,10 @@ for (const projectType of ['new', 'existing']) {
                 ];
                 for (const file of targets) {
                     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
-                    fs.writeFileSync(path.join(root, file), '기록 원본: project-notes/active.md\n');
+                    fs.writeFileSync(path.join(root, file),
+                        '기록 원본: project-notes/active.md\n\n' +
+                        '<!-- ai-init:jobkim:start -->\nlegacy-managed-policy\n<!-- ai-init:jobkim:end -->\n' +
+                        '사용자 후속 지침\n');
                 }
                 for (let run = 0; run < 2; run += 1) {
                     copyDirectory(path.join(repositoryRoot, 'bundled-skills'), sources);
@@ -49,10 +57,16 @@ for (const projectType of ['new', 'existing']) {
                 for (const file of targets) {
                     const content = fs.readFileSync(path.join(root, file), 'utf8');
                     assert.ok(content.startsWith('기록 원본: project-notes/active.md\n'));
+                    assert.ok(content.endsWith('사용자 후속 지침\n'));
+                    assert.equal(content.includes('legacy-managed-policy'), false);
                     assert.ok(content.includes(fs.readFileSync(path.join(repositoryRoot, 'rules/core.md'), 'utf8').trim()));
                     assert.equal(content.split('<!-- ai-init:jobkim:start -->').length - 1, 1);
                 }
                 assert.equal(fs.readFileSync(customRecord, 'utf8'), '# 사용자 작업\n검증 대기\n');
+                for (const file of customRules) {
+                    assert.equal(fs.readFileSync(file, 'utf8'),
+                        `# 사용자 정책: ${path.basename(file)}\n계획 변경은 피드백 후 진행\n`);
+                }
                 assert.equal(fs.existsSync(path.join(root, 'docs')), false);
                 assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), engines.includes('1'));
                 assert.equal(fs.existsSync(path.join(root, 'GEMINI.md')), engines.includes('2'));

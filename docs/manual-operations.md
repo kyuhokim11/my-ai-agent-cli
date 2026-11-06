@@ -4,7 +4,8 @@
 
 ## 지금 확인할 곳
 
-- 이번 릴리스 결과: [v1.3.0 릴리스 기록](#v130-릴리스-기록)
+- 다음 버전 변경 상세·검증·전환: [v1.4.0 준비 기록](#v140-변경-상세와-릴리스-준비)
+- 최근 공개 릴리스 결과: [v1.3.0 릴리스 기록](#v130-릴리스-기록)
 - 커밋부터 게시까지 실행 순서: [릴리스 절차](#릴리스-절차)
 - Git과 npm을 맞춰야 하는 범위: [일치 기준](#git과-npm의-일치-기준)
 - 목적·분야별 적용 기준: [시스템 전략](system-strategy.md)
@@ -15,6 +16,97 @@
 코드·문서 수정과 검증은 에이전트가 준비한다. Git 스테이징·커밋·푸시·태그, npm 인증·게시, 패키지 삭제·접근 권한 변경과 운영 배포는 사용자가 직접 수행한다. 특정 단계만 일회성으로 맡길 수 있으며, 그 권한은 다음 단계로 이어지지 않는다. 에이전트는 목적·범위·대상 파일과 검증 방법을 먼저 제시한다.
 
 npm 계정과 scope는 `jobbykim`, 저자는 `jobkim`, GitHub 소유자는 `kyuhokim11`이다. 비밀번호·토큰·2FA 코드와 복구 코드는 기록하지 않는다.
+
+## v1.4.0 변경 상세와 릴리스 준비
+
+확인일: 2026-11-06, Asia/Seoul. 이 절은 이번 변경의 상세·전환·검증·버전 상태를 관리하는 원본이다. 과거 릴리스 결과와 새 소스의 준비 상태를 구분한다.
+
+### 목적과 사용자 피드백
+
+절차·승인·점검은 실수, 무단 변경과 근거 없는 보고를 막기 위한 장치다. 이를 유지하면서 구체적인 계획과 실제 검증에 집중하도록 조정했다. 구현 재량은 넓히되 계획을 바꾸는 다른 판단·의견과 규칙 충돌은 사용자 피드백을 받은 뒤 진행한다. 목적·효율을 해치는 내용은 반드시 짚고 개선한다.
+
+### 이전 정책과 달라진 동작
+
+| 항목 | 이전 동작 | 새 동작과 유지할 경계 |
+|---|---|---|
+| 계획 | 설계·파일 목록·4단계 절차 중심 | 목표·성공 조건·제외 범위, 사실·미확인 사항, 접근·대안, 파일·계약·의존성 영향, 순서·위험·검증 방법 구체화. 단순 작업은 짧게 공유 |
+| 구현 | 최소 변경과 한 모듈·파일씩 수정 | 원인 해결·정확성·유지보수성을 기준으로 여러 파일을 논리적 단위로 수정. 사용자 변경·계약·품질 보장 유지 |
+| 승인 | 구조 변경·의존성·리팩토링·any에 일률적 별도 승인 | 계획에 포함된 개선은 재승인 없이 진행. 설치·환경 변경은 공유하고 승인된 범위에서만 수행 |
+| 계획 변경 | 일반 승인 지침에 분산 | 목표·범위·접근·계약·의존성·검증 기준을 바꾸는 판단이나 다른 의견은 이유·영향·대안을 공유하고 피드백 후 진행 |
+| 규칙 충돌 | 가까운 지침 적용, 미해결 충돌만 알림 | 충돌 문구·출처·영향·권장안을 제시하고 피드백 전 관련 변경 보류. 상위 지침은 승인으로 우회 불가 |
+| 절차·보고 | 고정 4단계와 다섯 보고 항목 | 프롬프트·진행 답변에 결과와 다음 행동 연결. 실패·미실행·확인 불가 명시, 잘못된 보고 정정 |
+| 스킬 | 대부분의 개발 작업에 Ponytail 의무 적용 | 도움이 되는 스킬만 선택하고 기존 조사 재사용. 사용자 지정·사용자 호출 전용 조건 유지 |
+| 기록 | 새 구조·설계 변경에 별도 승인 | 계획 안의 갱신은 진행하고 계획 변경은 피드백 후 수행. 같은 사실은 한 원본에 두고 읽기 전용 요청은 기록도 수정하지 않음 |
+| 개선 | 관련 없는 정리 방지 중심 | 목적·효율을 해치는 내용을 공유하고 범위 안에서 수정·삭제·추가. 범위 밖이면 피드백 후 조치 |
+
+명확한 구현 요청은 조사·구현·관련 검증·문서 갱신을 포함한다. “계획만”·“승인 후 진행” 조건은 지킨다. 현재 대화의 승인 범위는 유지하며 과거 기록만으로 새 작업을 시작하지 않는다. Git·게시·배포 권한은 위임된 단계에만 적용한다.
+
+### 파일별 변경
+
+| 파일 | 반영 내용 |
+|---|---|
+| `rules/core.md` | 판단·계획·실행·검증·기록·스킬 재구성, 계획 변경·충돌의 피드백 경계 |
+| `rules/new-project.md` | 최소 구조 강제 완화, 요구·유지보수성에 맞는 구조·도구 선택 |
+| `rules/existing-project.md` | 필요한 영향 경로 조사, 맥락 재사용, 다른 판단·충돌 시 피드백 |
+| `setup.js` | 새 팀·개인 템플릿의 충돌·의존성·테스트 정책 정합화. 설치 알고리즘 변경 없음 |
+| `bundled-skills/jobkim-project-intake/SKILL.md` | 원인 해결 계획, 조사 깊이·계획 항목·피드백 기준 |
+| `bundled-skills/jobkim-project-context/SKILL.md` | 현재 승인과 과거 기록 구분, 계획 안의 기록 구조 변경·갱신 |
+| `bundled-skills/jobkim-project-context/references/records.md` | 합의한 접근·검증 기준·계획 변경 피드백 기록 |
+| `test/context-policy.test.js` | 이전 관리 구간 교체와 사용자 지침 앞뒤·팀/개인 규칙·작업 기록 보존을 6개 조합에서 반복 확인 |
+| `README.md` | 사용 흐름·기존 규칙 전환·로컬 실행·미게시 버전 안내 |
+| `docs/system-strategy.md` | 절차의 목적과 계획·재량·피드백 책임 |
+| `docs/project-context-policy-design.md` | 기록 절차·실사용 시나리오·이전/새 정책 비교 평가 기준 |
+| `docs/manual-operations.md` | 상세 변경 원본, 검증·버전 감사, 다음 릴리스 명령 |
+| `package.json` | 새 정책 식별을 위해 `1.3.0` → `1.4.0` |
+
+공개 `v1.3.0` 이후 선행 로컬 커밋 `0ed5a71e86045253f6e66f0526ff16c3f86a2d84`도 다음 배포의 일부다. 그 커밋의 프로젝트 목적·성공 조건·계약·ADR·검증 명령·실제 로컬 환경 안내는 유지한다. 위 표는 그 선행 커밋 위에 적용한 이번 변경이다.
+
+### 버전과 Git·npm 감사
+
+- 소스 버전: `1.4.0`. 설치 명령·파일 경로·설정/설치 정보 형식·사용자 파일 보존을 유지하면서 작업 정책을 개선하므로 minor로 구분한다. 에이전트 기본 행동은 바뀌므로 기존 규칙 검토가 필요하다.
+- 온라인 확인: 공개 버전은 `1.0.0`~`1.3.0`, npm `latest`는 `1.3.0`이다. `1.4.0`은 조회 시점에 미게시다.
+- 공개 `v1.3.0`의 로컬·원격 태그 대상과 당시 패키지 버전 일치: `703b762ab5fca310604f039a3359ea1decdbbbdd`, `1.3.0`.
+- 확인한 원격 `main`: `06b5bb9fd42d8b65863b9ddf4a7cbe9d46401b41`. 시작 시 로컬은 선행 커밋 `0ed5a71e86045253f6e66f0526ff16c3f86a2d84`로 1개 앞서 있었고 이번 변경은 12개 미커밋 파일이었다.
+- 잠금 파일은 이 저장소에서 관리하지 않아 갱신 대상이 없다. 설치 출력·관리 표식·`install-info.json`은 `package.json`에서 버전을 읽으며 설치 테스트가 일치를 확인한다.
+- 현재 소스는 로컬 커밋 준비 중이다. 최종 커밋 식별자는 로컬 커밋 후 이 절에 추가한다. 기존 공개 태그는 이동·재사용하지 않는다.
+- 새 태그·원격 푸시·npm 게시·다른 프로젝트 재설치는 이번 준비 작업에서 수행하지 않는다. 소스 버전과 npm `latest` 차이는 미게시 상태를 명시한 정상적인 준비 상태다.
+
+### 검증 결과와 한계
+
+버전 변경 후 다음 검증을 다시 수행했다. 실행 환경은 Windows, Node.js `v22.22.2`, npm `10.9.7`이다.
+
+| 검증 | 확인한 범위와 결과 |
+|---|---|
+| `npm test` | `1.4.0`에서 30개 통과, 실패·스킵 없음. 설치 정보의 버전도 새 패키지 버전과 일치 |
+| `node --check setup.js` | 구문 검사 통과 |
+| `git diff --check` | 공백 오류 없음 |
+| `npm pack --json --ignore-scripts` | 임시 폴더에 `jobbykim-ai-init-1.4.0.tgz` 생성, 예상한 배포 파일 13개 확인. 테스트는 별도로 수행했으므로 패키징 때 수명 주기 스크립트는 생략 |
+| tarball 내용 대조 | 모든 배포 파일을 현재 소스와 바이트 단위 비교해 일치. 버전·공통 규칙·신규/기존 규칙·자체 스킬과 참조 포함 확인 |
+| tarball 설치·재설치 | 압축을 푼 실제 패키지로 신규/기존 × 엔진 3가지의 6개 조합을 각각 두 번 실행. 관리 구간 교체, 사용자 지침 앞뒤·팀/개인 규칙·작업 기록 보존, `install-info.json`의 `1.4.0` 확인 |
+| 문서 참조 | README·docs의 내부 링크 대상과 제목 앵커 검사 통과 |
+
+패키지 SHA-1: `5dd201196f55306c43e2dc4f00677bbb62be2523`. 이 값은 위 준비 소스를 패키징한 결과이며 npm 게시 확인값은 아니다. tarball 설치 검증에서는 외부 다운로드 목록을 테스트 프로세스 메모리에서 비워 자체 번들·정책·설치 정보 경로만 실행했다. 외부 스킬 실시간 다운로드와 공개 `npx` 검증은 이번 tarball 확인에 포함되지 않는다. 임시 산출물은 저장소에 추가하지 않았다.
+
+스킬의 `quick_validate.py`는 `PyYAML` 미설치로 실패했다. 새 의존성 설치 없이 단순 frontmatter·이름·설명·참조 파일 검사를 수행해 통과했으며 전용 검증기 통과로 보고하지 않는다.
+
+실제 에이전트의 계획 이탈·충돌 피드백·검증 보고 행동, 이전/새 규칙의 품질·시간·토큰 비교는 미수행이다. [실제 사용 확인](project-context-policy-design.md#실제-사용-확인)으로 별도 평가한다. 설치 테스트를 성능 개선의 증거로 취급하지 않는다. macOS/Linux 실환경도 미검증이다.
+
+### 기존 프로젝트에 적용하는 방법
+
+1. 대상 프로젝트의 변경과 기록을 확인한다. 이 저장소의 수정은 다른 프로젝트에 자동 적용되지 않는다.
+2. 미게시 소스는 대상 프로젝트 루트에서 `node C:/dev/my-ai-agent-cli/setup.js`를 실행해 유형·엔진을 선택한다. 실제 경로에 맞추며 외부 스킬 동기화에는 네트워크가 필요하다. 공개 후에는 `npx @jobbykim/ai-init@1.4.0`을 사용할 수 있다.
+3. 관리 구간·관리 스킬 갱신과 사용자 지침·스킬·팀/개인 규칙·작업 기록 보존을 확인한다. 초기화 프로그램은 자연어 규칙 충돌을 자동 해소하지 않는다.
+4. 파일별 수정, 일률적인 구조 변경 승인, Ponytail 의무 사용, 고정 보고 규칙을 검토하고 충돌은 출처·영향·권장안을 확인해 사용자 피드백 후 수정한다.
+5. 새 세션에서 계획·구현·피드백·검증 행동을 확인한다. 기록의 다음 행동을 실행 권한으로 해석하지 않는다.
+
+### 이번 작업의 변화 이력
+
+| 확인일·시간대 | 구분 | 변화와 근거 |
+|---|---|---|
+| 2026-11-06 Asia/Seoul | 정책 변경 | 사용자 피드백에 따라 규칙·템플릿·스킬·문서 수정, 설치 보존 테스트 강화 |
+| 2026-11-06 Asia/Seoul | 검증 | 이전 단계 30개 테스트·구문·diff 검사 통과. 전용 검증기 의존성 누락·행동 평가 미수행 구분 |
+| 2026-11-06 Asia/Seoul | 버전 보완 | 공개 태그·npm 대조, 소스 `1.4.0` 갱신, 상세·전환·배포 준비 기록 |
+| 2026-11-06 Asia/Seoul | 배포 준비 검증 | `1.4.0` 테스트 30개, 실제 tarball 13개 파일·소스 일치, 6개 조합 설치·재설치, 문서 링크·앵커 검사 통과 |
 
 ## v1.0.0 릴리스 기록
 
@@ -173,7 +265,7 @@ Windows에서는 과거 공개 실행과 현재 자동 테스트를 확인했다
 
 ## 릴리스 절차
 
-명령은 한 단계씩 실행하고 결과를 확인한 뒤 다음 단계로 넘어간다. 기본 위치는 `C:\dev\my-ai-agent-cli`다. 아래는 `1.3.0` 기준이다.
+명령은 한 단계씩 실행하고 결과를 확인한 뒤 다음 단계로 넘어간다. 기본 위치는 `C:\dev\my-ai-agent-cli`다. 아래는 `1.4.0` 기준이다.
 
 ### 1. 사전 조건 확인
 
@@ -212,14 +304,14 @@ npm publish --dry-run --registry=https://registry.npmjs.org/
 - 하위 호환 기능 추가: minor
 - 기존 사용법이나 생성 결과의 호환되지 않는 변경: major
 
-버전은 사용자 결정 후 변경하고 `package.json`에서 확인한다. 버전이나 배포 파일을 바꿨다면 미리보기를 다시 확인한다.
+버전은 사용자 결정 또는 명시적으로 위임한 버전 정리 범위에서 변경하고 `package.json`에서 확인한다. 버전이나 배포 파일을 바꿨다면 미리보기를 다시 확인한다.
 
 ### 4. 커밋과 브랜치 푸시
 
-에이전트가 제시한 대상 파일만 스테이징한다. 아래 `git add`는 이번 문서 정리 범위다. 다른 배포에서는 해당 변경 파일 목록으로 바꾼다.
+에이전트가 제시한 대상 파일만 스테이징한다. 아래 `git add`는 이번 1.4.0 준비 범위다. 다른 배포에서는 해당 변경 파일 목록으로 바꾼다.
 
 ```powershell
-git add README.md docs/manual-operations.md docs/project-context-policy-design.md docs/system-strategy.md
+git add package.json setup.js rules/core.md rules/new-project.md rules/existing-project.md bundled-skills/jobkim-project-intake/SKILL.md bundled-skills/jobkim-project-context/SKILL.md bundled-skills/jobkim-project-context/references/records.md test/context-policy.test.js README.md docs/manual-operations.md docs/project-context-policy-design.md docs/system-strategy.md
 git diff --cached --name-only
 git diff --cached --check
 git diff --cached
@@ -228,13 +320,13 @@ git diff --cached
 예상 파일만 포함됐는지 확인한 뒤 커밋한다. 메시지는 영어 유형과 한글 설명으로 쓴다.
 
 ```powershell
-git commit -m "docs: 사용 안내와 연관 문서를 일관되게 정리"
+git commit -m "feat: 계획과 피드백 중심의 AI 협업 정책 개선 (v1.4.0)"
 git log -1 --oneline
 git rev-parse HEAD
 git status --short
 ```
 
-원하는 변경이 모두 커밋됐고 작업 트리가 깨끗하면 푸시한다.
+원하는 변경이 모두 커밋됐고 작업 트리가 깨끗하면 사용자 직접 수행 또는 명시적 위임으로 푸시한다. 로컬 커밋 준비를 원격 푸시·태그·npm 게시 승인으로 확대하지 않는다.
 
 ```powershell
 git push origin main
@@ -247,20 +339,20 @@ git status --short --branch
 ### 5. 로컬 태그
 
 ```powershell
-git tag --list v1.3.0
+git tag --list v1.4.0
 ```
 
-없을 때만 검증한 HEAD에 태그를 만든다. 이미 있으면 `git rev-list -n 1 v1.3.0`으로 대상부터 확인하고 임의로 옮기지 않는다.
+없을 때만 검증한 HEAD에 태그를 만든다. 이미 있으면 `git rev-list -n 1 v1.4.0`으로 대상부터 확인하고 임의로 옮기지 않는다.
 
 ```powershell
-git tag -a v1.3.0 -m "release: v1.3.0"
-git rev-list -n 1 v1.3.0
+git tag -a v1.4.0 -m "release: v1.4.0"
+git rev-list -n 1 v1.4.0
 git rev-parse HEAD
 ```
 
 두 SHA가 같아야 한다. 전체 SHA는 게시 후 결과 기록에 남기고, 태그는 공개 패키지 검증이 끝날 때 푸시한다.
 
-위임 예시: `현재 HEAD에 v1.3.0 로컬 태그만 만들고 SHA를 확인해줘. 태그 푸시는 하지 마.`
+위임 예시: `현재 HEAD에 v1.4.0 로컬 태그만 만들고 SHA를 확인해줘. 태그 푸시는 하지 마.`
 
 ### 6. npm 인증과 게시
 
@@ -268,7 +360,7 @@ git rev-parse HEAD
 
 ```powershell
 npm whoami --registry=https://registry.npmjs.org/
-npm view @jobbykim/ai-init@1.3.0 version --registry=https://registry.npmjs.org/
+npm view @jobbykim/ai-init@1.4.0 version --registry=https://registry.npmjs.org/
 ```
 
 계정이 `jobbykim`인지 확인한다. 인증 실패 시 `npm login --registry=https://registry.npmjs.org/` 후 다시 확인한다. 미게시 버전 조회의 `E404` 외 오류는 먼저 해결한다.
@@ -282,7 +374,7 @@ npm publish --access public --registry=https://registry.npmjs.org/
 게시 성공 여부가 불분명하면 반복 게시하지 말고 먼저 조회한다.
 
 ```powershell
-npm view @jobbykim/ai-init@1.3.0 name version --registry=https://registry.npmjs.org/
+npm view @jobbykim/ai-init@1.4.0 name version --registry=https://registry.npmjs.org/
 npm view @jobbykim/ai-init dist-tags --json --registry=https://registry.npmjs.org/
 ```
 
@@ -291,7 +383,7 @@ npm view @jobbykim/ai-init dist-tags --json --registry=https://registry.npmjs.or
 저장소 밖의 신규·기존 테스트 프로젝트 루트에서 각각 실행한다.
 
 ```powershell
-npx @jobbykim/ai-init@1.3.0
+npx @jobbykim/ai-init@1.4.0
 Get-Content .ai-core/install-info.json
 ```
 
@@ -304,10 +396,10 @@ Get-Content .ai-core/install-info.json
 공개 패키지 검증이 모두 끝나면 사용자가 태그를 푸시한다.
 
 ```powershell
-git push origin v1.3.0
+git push origin v1.4.0
 ```
 
-위임 예시: `공개 검증 결과를 확인하고 기존 v1.3.0 태그만 푸시해줘.`
+위임 예시: `공개 검증 결과를 확인하고 기존 v1.4.0 태그만 푸시해줘.`
 
 npm 게시가 실패하면 태그는 푸시하지 않는다. 소스를 수정했다면 재검증과 커밋을 먼저 진행하고 기존 로컬 태그의 대상을 확인한다. 이미 게시한 버전은 새 버전으로 수정 배포한다.
 
