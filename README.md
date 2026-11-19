@@ -1,6 +1,6 @@
 # ai-init
 
-사람의 설계 의도와 프로젝트 맥락을 AI에게 전달하고, 구체적인 계획과 실제 검증을 바탕으로 정확하고 효율적으로 작업하도록 규칙과 스킬을 설치하는 CLI입니다. 새 컴퓨터나 다른 프로젝트에서도 같은 개발 방식을 쓰려고 만들었습니다. Codex, Gemini CLI, Antigravity에 적용할 수 있습니다. 목적과 판단 기준은 [시스템 전략](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/system-strategy.md)에 정리합니다.
+사람의 설계 의도와 프로젝트 맥락을 AI에게 전달하고, 구체적인 계획과 실제 검증을 바탕으로 정확하고 효율적으로 작업하도록 규칙과 스킬을 설치하는 CLI입니다. 새 컴퓨터나 다른 프로젝트에서도 같은 개발 방식을 쓰려고 만들었습니다. Codex, Gemini CLI, Antigravity, Claude Code에 적용할 수 있습니다. 목적과 판단 기준은 [시스템 전략](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/system-strategy.md)에 정리합니다.
 
 ## 무엇을 설정하나요?
 
@@ -22,7 +22,17 @@ npx @jobbykim/ai-init
 ```
 
 1. **신규 / 기존 프로젝트**를 선택합니다. 신규는 목표와 요구에 맞는 구조부터 시작하고, 기존은 실제 코드와 문서를 먼저 확인하도록 설정합니다.
-2. **Codex / Gemini·Antigravity / 둘 모두**를 선택합니다. 번호는 `1`, `2`, `1,2`로 입력합니다.
+2. **사용할 AI**를 선택합니다. 복수 선택은 `1,3`처럼 쉼표로 입력합니다.
+
+```text
+사용할 AI — 복수 선택 가능
+1) Codex
+2) Gemini CLI / Antigravity
+3) Claude Code
+4) 전체 선택
+```
+
+재실행하면 기존 선택이 표시됩니다. Enter로 유지하거나 새 번호를 입력합니다. 프로젝트 유형·프로필·스킬 선택은 `ai-init.json`에서 재사용하며, 신규/기존 프로젝트는 작업 정책의 구분이고 첫 설치/갱신 여부는 자동으로 확인합니다. 앱 코드·프레임워크·문서 체계는 설치만으로 생성하지 않습니다.
 
 설치가 끝나면 해당 프로젝트에서 에이전트의 새 세션을 시작하고 평소처럼 작업을 요청하세요. 예를 들면:
 
@@ -40,12 +50,15 @@ npx @jobbykim/ai-init
 |---|---|
 | `AGENTS.md` | Codex 작업 지침 |
 | `GEMINI.md`, `.agents/rules/jobkim.md` | Gemini CLI와 Antigravity 작업 지침 |
+| `CLAUDE.md` 또는 기존 `.claude/CLAUDE.md` | Claude Code 작업 지침 |
+| `ai-init.json`, `ai-init.lock.json` | 공유할 설치 구성과 외부 소스 고정 정보 |
 | `.agents/rules/project.md` | 프로젝트/팀 공통 커스텀 규칙 (Git 추적 권장) |
 | `.agents/rules/local.md` | 개발자 개인 로컬 커스텀 규칙 (Git 제외) |
-| `.agents/skills/` | 공통 스킬 |
+| `.agents/skills/` | Codex·Gemini CLI·Antigravity 스킬 설치본 |
+| `.claude/skills/` | Claude Code 스킬 설치본 |
 | `.ai-core/` | 스킬 원본과 설치 정보 |
 
-선택한 엔진의 지침만 생성합니다. 기존 지침은 보존하고 ai-init이 추가한 구간을 갱신합니다. 같은 이름의 사용자 스킬이 있으면 덮어쓰지 않고 건너뜁니다.
+선택한 엔진의 지침만 생성합니다. 기존 지침의 사용자 구간과 사용자 스킬은 보존합니다. 같은 이름의 사용자 스킬이나 수정된 관리 스킬·관리 구간이 있으면 충돌 경로를 보고하고 전체 적용을 보류합니다. 제품별 설치본은 일반 파일로 복사하며 공통 원본은 재사용합니다.
 
 제품별 선택·미리보기·진단도 제공합니다. 아래는 이 저장소의 개발 소스 기준이며 `--root`는 실제 대상 경로로 바꿉니다. npm 패키지를 사용할 때는 해당 버전의 `npx @jobbykim/ai-init` 뒤에 같은 인자를 붙입니다.
 
@@ -54,11 +67,30 @@ node setup.js init --root C:/dev/example --type existing --engine codex,antigrav
 node setup.js init --root C:/dev/example --type existing --engine codex,antigravity --profile bundled
 node setup.js status --root C:/dev/example --json
 node setup.js doctor --root C:/dev/example --json
+# 기존 제품을 유지하고 Claude 추가
+node setup.js init --root C:/dev/example --add-engine claude --dry-run --json
+node setup.js init --root C:/dev/example --add-engine claude
+# 최종 제품 구성을 지정하거나 저장 구성 재사용
+node setup.js init --root C:/dev/example --engine codex,claude
+node setup.js init --root C:/dev/example --json
 ```
 
-`--profile full`은 자체·외부 스킬을, `bundled`는 자체 스킬만 설치합니다. `--skill NAME`을 반복하면 외부 스킬을 선택하며 자체 스킬은 유지합니다. 선택에서 빠진 ai-init 관리 스킬은 제거되므로 범위를 바꿀 때 먼저 미리보기를 확인합니다. 기존 대화형 번호 `1`, `2`, `1,2`는 유지하며 옵션에서는 `codex`, `gemini`, `antigravity`를 각각 선택할 수 있습니다.
+`--profile full`은 자체·외부 스킬을, `bundled`는 자체 스킬만 설치합니다. 첫 설치 기본 프로필은 기존과 같은 full이며 옵션을 생략한 갱신은 저장값을 유지합니다. `--skill NAME`을 반복하면 외부 스킬을 선택하며 자체 스킬은 유지합니다. 선택에서 빠진 관리 스킬은 무결성 확인 후 제거하므로 범위를 바꿀 때 미리보기를 확인합니다. 기존 번호 `1`, `2`, `1,2`는 유지하며 옵션에서는 `codex`, `gemini`, `antigravity`, `claude`, `all`을 사용할 수 있습니다. `--engine`은 최종 구성을 지정하고 `--add-engine`은 기존 구성에 추가합니다.
 
-Antigravity 관리 규칙과 새 템플릿에는 YAML `trigger`를 포함합니다. 기존 사용자 `project.md`·`local.md`는 자동 수정하지 않고 `doctor`에서 누락을 안내합니다. Codex의 루트 `AGENTS.override.md`가 활성 상태라면 그 파일의 관리 구간을 갱신합니다. Claude Code 전용 설치는 현재 지원 범위에 포함하지 않습니다.
+Antigravity 관리 규칙과 새 템플릿에는 YAML `trigger`를 포함합니다. 기존 사용자 `project.md`·`local.md`는 자동 수정하지 않고 Antigravity 선택 시 `doctor`에서 누락을 안내합니다. Codex의 루트 `AGENTS.override.md`가 활성 상태라면 해당 관리 구간을 갱신합니다. Claude는 전용 진입 파일에서 팀·개인 규칙을 import하며 Codex override를 자동 적용한다고 가정하지 않습니다.
+
+### Claude Code 준비
+
+ai-init은 Claude Code 실행 프로그램과 인증을 설치하지 않습니다. Windows PowerShell에서는 아래 공식 설치 명령을 한 번 실행하고 새 터미널을 엽니다.
+
+```powershell
+irm https://claude.ai/install.ps1 | iex
+claude --version
+claude doctor
+claude auth login
+```
+
+대상 프로젝트에서 ai-init으로 `3) Claude Code`를 선택한 다음 `claude`로 새 세션을 시작합니다. `/context all`에서 지침을 확인하고 `/jobkim-project-intake`, `/jobkim-project-context`로 자체 스킬을 호출할 수 있습니다. 실행 환경·버전에 따라 확인이 필요하며 파일 설치 성공을 실제 호출 검증으로 취급하지 않습니다. 계정별 인증·다른 OS 설치 방법은 [공식 설치 문서](https://code.claude.com/docs/en/setup)를 따릅니다.
 
 ### 사용자 및 프로젝트 커스텀 규칙
 
@@ -70,7 +102,7 @@ Antigravity 관리 규칙과 새 템플릿에는 YAML `trigger`를 포함합니�
 
 `project.md`에는 목적·성공 조건, 모듈 책임, 유지할 계약, 검증 명령과 ADR 원본 링크를 기록합니다. 3D·디자인 시스템 등 분야별 기준은 해당 프로젝트에 필요한 항목만 선택합니다. `local.md`에는 실제 OS·셸과 소스·외부 에셋 경로를 기록하며, 인증 정보는 넣지 않습니다. 새 템플릿은 신규 파일에만 적용되므로 기존 파일은 필요한 항목만 직접 보완합니다. 적용 예시는 [프로젝트별 기준](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/system-strategy.md#프로젝트별-기준)을 참고하세요.
 
-`.gitignore`에는 `.ai-core/`, `.agents/rules/jobkim.md`, `.agents/rules/local.md`, `.agents/skills/` 전체를 제외하도록 추가합니다. `AGENTS.md`, `GEMINI.md`, `.agents/rules/project.md`는 Git 제외 대상이 아닙니다. 이미 Git에서 추적 중인 파일은 이 설정만으로 추적이 해제되지 않습니다.
+`.gitignore`의 ai-init 구간에는 캐시·개인 규칙·개인 Claude 설정과 생성한 스킬 경로만 제외하도록 추가합니다. `.agents/skills/`나 `.claude/` 전체를 제외하지 않아 사용자 스킬과 팀 설정을 공유할 수 있습니다. `ai-init.json`, `ai-init.lock.json`, 제품 진입 지침과 `project.md`는 공유합니다. 기존 사용자 ignore 항목과 이미 추적 중인 파일의 Git 상태는 바꾸지 않습니다.
 
 ## 업데이트와 버전 확인
 
@@ -101,7 +133,9 @@ Get-Content .ai-core/install-info.json
 
 ### 기존 프로젝트 업데이트
 
-규칙을 업데이트하려면 대상 프로젝트 루트에서 초기화 명령을 다시 실행합니다. ai-init 관리 구간과 관리 스킬이 갱신되며, 사용자 소유 구간·스킬과 기존 `project.md`·`local.md`는 보존됩니다.
+규칙을 업데이트하려면 대상 프로젝트 루트에서 초기화 명령을 다시 실행합니다. 저장 구성을 불러와 변경 없는 관리 구간과 관리 스킬을 갱신하며 사용자 구간·스킬과 기존 `project.md`·`local.md`는 보존합니다. 제품을 제외하면 해당 관리 설치본과 관리 구간만 정리하며 사용자 내용이 있는 지침 파일은 남깁니다.
+
+이전 schema v1 설치 기록과 관리 junction은 새 기록·일반 파일로 이관합니다. 무결성 기록이 없는 오래된 관리 스킬은 자동 덮어쓰지 않습니다. dry-run에서 안내한 스킬을 프로젝트 밖에 별도 보관하고 해당 스킬 설치 폴더를 제거한 뒤 재설치하세요. 필요한 사용자 변경은 별도 이름의 스킬로 보존합니다. 수정된 관리 스킬·관리 구간도 사용자 내용과 설치물을 분리한 뒤 다시 실행합니다. 설치 폴더나 지침 파일 전체가 삭제됐다면 재설치로 복원할 수 있습니다.
 
 업데이트 후에는 기존 사용자 규칙과 새 기본 규칙이 충돌하는지 검토합니다. 충돌이 있으면 에이전트가 문구·출처·영향·권장안을 제시하고 사용자 피드백을 받은 뒤 수정합니다. 설치 프로그램이 자연어 규칙의 충돌을 자동 판정하거나 해소하지는 않습니다.
 
@@ -111,11 +145,13 @@ Get-Content .ai-core/install-info.json
 
 에이전트가 지침을 항상 지킨다고 보장하지는 않습니다. 스킬 인식과 실행은 사용하는 에이전트에 따라 확인해야 하며, 원본 플러그인의 전체 동작과 같지는 않습니다. 설치만으로 과거 작업 이력이 생기거나 모델이 학습되는 것도 아닙니다.
 
-외부 스킬을 내려받는 데 시간이 걸릴 수 있고, 현재 자동 제거 명령은 없습니다. `--dry-run`도 임시 사본에서 다운로드·검증하므로 네트워크와 임시 공간이 필요합니다. 정책·스킬 파일의 변경 목록을 제공하며 대상 프로젝트는 수정하지 않습니다. 설치 정보·캐시·잠금·새 템플릿도 실제 적용 때 갱신됩니다. macOS/Linux 실환경 결과는 CI 실행 후 별도로 확인합니다.
+외부 스킬을 내려받는 데 시간이 걸릴 수 있고, 전체 제거 전용 명령은 없습니다. 제품 선택에서 제외한 관리 설치본은 정리합니다. `--dry-run`도 임시 사본에서 다운로드·검증하므로 네트워크와 임시 공간이 필요합니다. 변경 목록에는 정책·스킬뿐 아니라 구성·잠금·캐시·템플릿·설치 기록도 포함하며 대상 프로젝트는 수정하지 않습니다. 충돌은 `ready: false`와 `conflicts`, 종료 코드 1로 보고합니다. macOS/Linux 결과는 CI 실행 후 확인합니다.
 
-`validate`는 YAML·이름·참조·호환 메타데이터를 검사하며 스킬 코드를 실행하지 않습니다. 설치 성공은 실제 에이전트 행동 평가와 구분합니다. 사용자 호출 전용으로 선언된 스킬은 원본을 보존한 파생본에서 Codex 호출 정책을 연결합니다. Gemini/Antigravity에서 같은 native 제한을 보장하지 않으며 `doctor`가 안내합니다. 설치는 실행 권한·샌드박스 설정을 완화하지 않습니다.
+`validate`는 YAML·이름·참조·호환 메타데이터를 검사하며 스킬 코드를 실행하지 않습니다. `validate --engine claude`는 지원하는 Claude 전용 필드의 타입도 확인합니다. 사용자 호출 전용은 제품별 파생본에서 Codex·Claude 형식으로 보존합니다. Gemini/Antigravity에서 같은 native 제한을 보장하지 않으며 `doctor`가 안내합니다. 실행 권한·샌드박스·hooks·MCP·플러그인 설정은 변경하지 않습니다. 실제 런타임 검증 여부는 설치 결과의 `runtimeVerified`로 구분합니다.
 
 ## 더 알아보기
+
+- [Claude 지원 구조와 작업별 커밋 메시지](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/claude-code-support.md): 설치 구조, 이전 설치 이관과 검증 상태.
 
 - [개발·배포 절차와 릴리스 기록](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/manual-operations.md): 커밋부터 게시까지 단계별 명령.
 - [프로젝트 기록과 작업 인계](https://github.com/kyuhokim11/my-ai-agent-cli/blob/main/docs/project-context-policy-design.md): 문서 구조, 변경 이력, 재개·인계 기준.
