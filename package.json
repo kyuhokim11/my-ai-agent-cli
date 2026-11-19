@@ -1,6 +1,6 @@
 {
     "name": "@jobbykim/ai-init",
-    "version": "1.4.0",
+    "version": "1.5.0-rc.1",
     "description": "어떤 프로젝트에서도 jobkim의 AI 개발 규칙과 스킬을 동일하게 적용하는 초기화 CLI",
     "main": "setup.js",
     "bin": {
@@ -9,6 +9,8 @@
     "files": [
         "setup.js",
         "skill-sources.json",
+        "skill-sources.lock.json",
+        "lib/",
         "NOTICE",
         "LICENSE",
         "README.md",
@@ -17,7 +19,13 @@
     ],
     "scripts": {
         "test": "node --test",
-        "prepublishOnly": "npm test"
+        "prepublishOnly": "npm test && npm run validate:skills",
+        "validate:skills": "node setup.js validate",
+        "eval:list": "node scripts/evaluate.js",
+        "eval:score": "node scripts/evaluate.js",
+        "test:network": "node scripts/smoke-install.js",
+        "verify:package": "node scripts/verify-package.js",
+        "sources:update": "node scripts/update-source-lock.js"
     },
     "engines": {
         "node": ">=18"
@@ -49,5 +57,8 @@
     },
     "publishConfig": {
         "access": "public"
+    },
+    "dependencies": {
+        "yaml": "2.9.1"
     }
 }

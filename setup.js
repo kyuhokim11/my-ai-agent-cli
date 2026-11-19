@@ -4,6 +4,15 @@ const crypto = require('crypto');
 const https = require('https');
 const path = require('path');
 const readline = require('readline');
+const os = require('os');
+const { validateSkill, antigravityRule, validSkillName } = require('./lib/skills');
+const { ENGINES, expandEngines, instructionChain, policyPaths } = require('./lib/engines');
+const { LOCK_NAME, validateSource, resolveLock, readLock, writeJsonAtomic, snapshotFiles, verifyCachedSource } = require('./lib/source-lock');
+const { transactionalInstall, cloneInstallState, exists: pathExists } = require('./lib/transaction');
+const { buildManifest, status, installationDiff } = require('./lib/diagnostics');
+const { parseArguments, HELP } = require('./lib/cli');
+const { releaseStatus } = require('./lib/release-status');
+const YAML = require('yaml');
 
 const SKILL_SOURCES = require('./skill-sources.json');
 const PACKAGE = require('./package.json');
@@ -81,6 +90,10 @@ const LOCAL_RULE_TEMPLATE = `# Local / Personal Rules
 
 function request(url, responseType = 'text', redirectCount = 0) {
     return new Promise((resolve, reject) => {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.protocol !== 'https:' || !['api.github.com', 'raw.githubusercontent.com', 'registry.npmjs.org'].includes(parsedUrl.hostname) || parsedUrl.username || parsedUrl.password || (parsedUrl.port && parsedUrl.port !== '443')) {
+            reject(new Error('허용되지 않은 다운로드 주소입니다.')); return;
+        }
         const requestOptions = {
             headers: {
                 Accept: responseType === 'json' ? 'application/vnd.github+json' : 'text/plain',
@@ -110,7 +123,13 @@ function request(url, responseType = 'text', redirectCount = 0) {
                 }
 
                 const chunks = [];
-                response.on('data', (chunk) => chunks.push(chunk));
+                let received = 0;
+                response.on('data', (chunk) => {
+                    received += chunk.length;
+                    if (received > 16 * 1024 * 1024) { response.destroy(new Error('다운로드 파일의 16 MiB 한도를 초과했습니다.')); return; }
+                    chunks.push(chunk);
+                });
+                response.on('error', reject);
                 response.on('end', () => {
                     const body = Buffer.concat(chunks);
                     if (responseType === 'buffer') {
@@ -138,6 +157,7 @@ function request(url, responseType = 'text', redirectCount = 0) {
 }
 
 function assertSafeRelativePath(relativePath) {
+    if (typeof relativePath !== 'string' || !relativePath || relativePath.includes('\\') || relativePath.includes(':') || /[\x00-\x1f]/.test(relativePath) || path.win32.isAbsolute(relativePath)) throw new Error(`안전하지 않은 원격 파일 경로입니다: ${relativePath}`);
     const normalized = path.normalize(relativePath);
     if (path.isAbsolute(normalized) || normalized === '..' || normalized.startsWith(`..${path.sep}`)) {
         throw new Error(`안전하지 않은 원격 파일 경로입니다: ${relativePath}`);
@@ -154,12 +174,16 @@ async function mapWithConcurrency(items, limit, worker) {
             await worker(items[currentIndex], currentIndex);
         }
     });
-    await Promise.all(workers);
+    const results = await Promise.allSettled(workers);
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure) throw failure.reason;
 }
 
-async function downloadSource(source, stagingRoot) {
-    const treeUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/git/trees/${encodeURIComponent(source.ref)}?recursive=1`;
-    const treeResponse = await request(treeUrl, 'json');
+async function downloadSource(source, stagingRoot, locked, fetch = request) {
+    validateSource(source);
+    const treeUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/git/trees/${locked.tree}?recursive=1`;
+    const treeResponse = await fetch(treeUrl, 'json');
+    if (treeResponse.sha !== locked.tree) throw new Error(`${source.id}: 잠금 tree SHA가 다릅니다 (${locked.tree} / ${treeResponse.sha}).`);
 
     if (treeResponse.truncated) {
         throw new Error(`${source.id} 저장소 파일 목록이 잘려 안전하게 동기화할 수 없습니다.`);
@@ -169,6 +193,20 @@ async function downloadSource(source, stagingRoot) {
     const files = treeResponse.tree.filter(
         (entry) => entry.type === 'blob' && entry.path.startsWith(prefix),
     );
+    const destinations = new Set();
+    for (const entry of files) {
+        const relative = assertSafeRelativePath(entry.path.slice(prefix.length));
+        const key = process.platform === 'win32' ? relative.toLowerCase() : relative;
+        if (destinations.has(key)) throw new Error(`중복 다운로드 경로: ${entry.path}`);
+        destinations.add(key);
+    }
+    if (files.length > 2500) throw new Error(`${source.id}: 소스 파일 2500개 한도를 초과했습니다.`);
+    if (files.reduce((total, entry) => total + (Number(entry.size) || 0), 0) > 128 * 1024 * 1024) throw new Error(`${source.id}: 소스의 128 MiB 한도를 초과했습니다.`);
+    let totalBytes = 0;
+    const accountBytes = (content) => {
+        totalBytes += content.length;
+        if (totalBytes > 128 * 1024 * 1024) throw new Error(`${source.id}: 소스의 128 MiB 한도를 초과했습니다.`);
+    };
 
     if (!files.some((entry) => path.posix.basename(entry.path) === 'SKILL.md')) {
         throw new Error(`${source.id}의 ${source.skillsPath}에서 SKILL.md를 찾지 못했습니다.`);
@@ -178,8 +216,10 @@ async function downloadSource(source, stagingRoot) {
         const relativePath = assertSafeRelativePath(entry.path.slice(prefix.length));
         const destination = path.join(stagingRoot, relativePath);
         const rawPath = entry.path.split('/').map(encodeURIComponent).join('/');
-        const rawUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${encodeURIComponent(source.ref)}/${rawPath}`;
-        const content = await request(rawUrl, 'buffer');
+        if (entry.mode === '120000') throw new Error(`외부 소스의 심볼릭 링크는 지원하지 않습니다: ${entry.path}`);
+        const rawUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${locked.commit}/${rawPath}`;
+        const content = await fetch(rawUrl, 'buffer');
+        accountBytes(content);
         const gitBlob = Buffer.concat([
             Buffer.from(`blob ${content.length}\0`, 'utf8'),
             content,
@@ -194,8 +234,13 @@ async function downloadSource(source, stagingRoot) {
 
     for (const legalFile of source.legalFiles || []) {
         const safeLegalFile = assertSafeRelativePath(legalFile);
-        const legalUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${encodeURIComponent(source.ref)}/${legalFile}`;
-        const content = await request(legalUrl, 'buffer');
+        const legalEntry = treeResponse.tree.find((entry) => entry.path === legalFile && entry.type === 'blob' && entry.mode !== '120000');
+        if (!legalEntry) throw new Error(`${source.id}: 잠금 소스에 라이선스 파일이 없습니다: ${legalFile}`);
+        const legalUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${locked.commit}/${legalFile}`;
+        const content = await fetch(legalUrl, 'buffer');
+        accountBytes(content);
+        const hash = crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${content.length}\0`), content])).digest('hex');
+        if (hash !== legalEntry.sha) throw new Error(`라이선스 Git blob SHA가 다릅니다: ${legalFile}`);
         fs.writeFileSync(path.join(stagingRoot, `_UPSTREAM_${path.basename(safeLegalFile)}`), content);
     }
 
@@ -205,7 +250,9 @@ async function downloadSource(source, stagingRoot) {
             {
                 repository: `https://github.com/${source.owner}/${source.repo}`,
                 requestedRef: source.ref,
+                resolvedCommitSha: locked.commit,
                 resolvedTreeSha: treeResponse.sha,
+                files: snapshotFiles(stagingRoot),
                 synchronizedAt: new Date().toISOString(),
             },
             null,
@@ -315,24 +362,27 @@ function syncBundledSkills(sourcesRoot) {
     }));
 }
 
-async function syncSource(source, sourcesRoot) {
+async function syncSource(source, sourcesRoot, locked, options = {}) {
+    const log = options.log || console.log;
     const sourceRoot = path.join(sourcesRoot, source.id);
     const stagingRoot = `${sourceRoot}.staging-${process.pid}`;
     fs.rmSync(stagingRoot, { recursive: true, force: true });
     fs.mkdirSync(stagingRoot, { recursive: true });
 
-    console.log(`[동기화 중] ${source.owner}/${source.repo}`);
+    log(`[동기화 중] ${source.owner}/${source.repo}`);
     try {
-        await downloadSource(source, stagingRoot);
+        await downloadSource(source, stagingRoot, locked, options.request || request);
+        for (const directory of findSkillDirectories(stagingRoot)) validateSkill(directory);
         replaceDirectory(stagingRoot, sourceRoot);
-        console.log(`[동기화 완료] ${source.owner}/${source.repo}`);
+        log(`[동기화 완료] ${source.owner}/${source.repo}`);
     } catch (error) {
         fs.rmSync(stagingRoot, { recursive: true, force: true });
         if (!fs.existsSync(sourceRoot)) {
             throw error;
         }
-        console.log(`[경고] ${source.id} 최신 버전 동기화 실패: ${error.message}`);
-        console.log('       마지막으로 정상 동기화된 로컬 버전을 사용합니다.');
+        verifyCachedSource(sourceRoot, locked);
+        log(`[경고] ${source.id} 동기화 실패: ${error.message}`);
+        log('       잠금 SHA와 무결성이 일치하는 마지막 로컬 버전을 사용합니다.');
     }
 
     const legalFiles = (source.legalFiles || []).map((legalFile) => {
@@ -357,12 +407,13 @@ function readManagedMarker(skillDirectory) {
     }
 }
 
-function installSkill(skill, targetRoot) {
+function installSkill(skill, targetRoot, log = console.log) {
+    if (!validSkillName(skill.name)) throw new Error(`안전하지 않은 스킬 이름: ${skill.name}`);
     const destination = path.join(targetRoot, skill.name);
     const existingMarker = fs.existsSync(destination) ? readManagedMarker(destination) : null;
 
-    if (fs.existsSync(destination) && existingMarker?.sourceId !== skill.sourceId) {
-        console.log(`[보존] 기존 사용자 스킬과 이름이 겹쳐 건너뜁니다: ${destination}`);
+    if (pathExists(destination) && (existingMarker?.managedBy !== USER_AGENT || existingMarker?.sourceId !== skill.sourceId)) {
+        log(`[보존] 기존 사용자 스킬과 이름이 겹쳐 건너뜁니다: ${destination}`);
         return false;
     }
 
@@ -385,7 +436,7 @@ function installSkill(skill, targetRoot) {
     return true;
 }
 
-function removeStaleManagedSkills(targetRoot, activeSkillNames) {
+function removeStaleManagedSkills(targetRoot, activeSkillNames, log = console.log) {
     const indexPath = path.join(targetRoot, '.ai-init-managed.json');
     let previousSkillNames = [];
     try {
@@ -395,6 +446,7 @@ function removeStaleManagedSkills(targetRoot, activeSkillNames) {
     }
 
     for (const skillName of previousSkillNames) {
+        if (!validSkillName(skillName)) throw new Error('관리 목록에 안전하지 않은 스킬 이름이 있습니다.');
         if (activeSkillNames.has(skillName)) {
             continue;
         }
@@ -402,7 +454,7 @@ function removeStaleManagedSkills(targetRoot, activeSkillNames) {
         const marker = fs.existsSync(destination) ? readManagedMarker(destination) : null;
         if (marker?.managedBy === USER_AGENT) {
             fs.rmSync(destination, { recursive: true, force: true });
-            console.log(`[정리] upstream에서 제거된 관리 스킬: ${destination}`);
+            log(`[정리] upstream에서 제거된 관리 스킬: ${destination}`);
         }
     }
 
@@ -512,7 +564,7 @@ function ensureCustomRuleTemplates(projectRoot) {
 
     for (const { filePath, template } of targets) {
         if (!fs.existsSync(filePath)) {
-            fs.writeFileSync(filePath, template, 'utf8');
+            fs.writeFileSync(filePath, antigravityRule(template), 'utf8');
         }
     }
 }
@@ -554,6 +606,8 @@ function inspectExistingProject(projectRoot) {
 
     return {
         generatedAt: new Date().toISOString(),
+        instructionChain: instructionChain(projectRoot),
+        customInstructions: existingFiles(['.codex/Codex.md']),
         instructionsToRead: existingFiles(instructionCandidates),
         configurationFiles: existingFiles(configurationCandidates),
         topLevelDirectories,
@@ -562,17 +616,10 @@ function inspectExistingProject(projectRoot) {
 
 function installProjectPolicy(projectRoot, projectType, selectedEngines, existingProfile) {
     const block = renderProjectPolicy(projectType);
-    const policyTargets = [];
-
-    if (selectedEngines.includes('1')) {
-        policyTargets.push(path.join(projectRoot, 'AGENTS.md'));
-    }
-    if (selectedEngines.includes('2')) {
-        policyTargets.push(path.join(projectRoot, 'GEMINI.md'));
-        policyTargets.push(path.join(projectRoot, '.agents', 'rules', 'jobkim.md'));
-    }
+    const policyTargets = policyPaths(projectRoot, selectedEngines).map((file) => path.join(projectRoot, file));
     for (const target of policyTargets) {
         upsertManagedBlock(target, block);
+        if (target === path.join(projectRoot, '.agents', 'rules', 'jobkim.md')) fs.writeFileSync(target, antigravityRule(fs.readFileSync(target, 'utf8')), 'utf8');
     }
 
     if (projectType === 'existing') {
@@ -583,7 +630,7 @@ function installProjectPolicy(projectRoot, projectType, selectedEngines, existin
     return policyTargets;
 }
 
-function writeInstallInfo(projectRoot, projectType, selectedEngines) {
+function writeInstallInfo(projectRoot, projectType, selectedEngines, options = {}) {
     const destination = path.join(projectRoot, '.ai-core', 'install-info.json');
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     const temporaryPath = `${destination}.${crypto.randomUUID()}.tmp`;
@@ -592,7 +639,8 @@ function writeInstallInfo(projectRoot, projectType, selectedEngines) {
         version: PACKAGE.version,
         appliedAt: new Date().toISOString(),
         projectType,
-        engines: selectedEngines.map((engine) => engine === '1' ? 'Codex' : 'Gemini/Antigravity'),
+        engines: selectedEngines.map((engine) => engine === '1' ? 'Codex' : engine === '2' ? 'Gemini/Antigravity' : ENGINES[engine]?.label || engine),
+        profile: options.profile || 'full',
     };
     try {
         fs.writeFileSync(temporaryPath, `${JSON.stringify(information, null, 2)}\n`, 'utf8');
@@ -602,23 +650,77 @@ function writeInstallInfo(projectRoot, projectType, selectedEngines) {
     }
 }
 
-async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'existing') {
-    selectedEngines = parseSelectedEngines(selectedEngines.join(','));
+async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'existing', options = {}) {
+    expandEngines(selectedEngines);
+    if (!['new', 'existing'].includes(projectType)) throw new Error('프로젝트 유형: new 또는 existing');
+    if (!['full', 'bundled'].includes(options.profile || 'full')) throw new Error('설치 프로필: full 또는 bundled');
+    projectRoot = path.resolve(projectRoot);
+    if (options.dryRun) {
+        const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-init-preview-'));
+        try {
+            cloneInstallState(projectRoot, temporary);
+            let previous = null;
+            try { previous = JSON.parse(fs.readFileSync(path.join(projectRoot, '.ai-core', 'install-manifest.json'), 'utf8')); } catch {}
+            if (previous?.files) {
+                for (const relative of Object.keys(previous.files)) {
+                    const candidate = path.resolve(projectRoot, relative);
+                    if (!candidate.startsWith(`${projectRoot}${path.sep}`)) throw new Error('미리보기 manifest 경로 오류');
+                    try { previous.files[relative] = crypto.createHash('sha256').update(fs.readFileSync(candidate)).digest('hex'); } catch { delete previous.files[relative]; }
+                }
+            }
+            const result = await synchronizeSkills(temporary, selectedEngines, projectType, { ...options, dryRun: false });
+            const manifest = JSON.parse(fs.readFileSync(path.join(temporary, '.ai-core', 'install-manifest.json'), 'utf8'));
+            return { ...result, dryRun: true, changes: installationDiff(previous, manifest), note: '임시 사본에서 다운로드·검증했습니다. 대상 프로젝트는 변경하지 않았습니다. 설치 정보·캐시·잠금·템플릿도 실제 설치 때 갱신됩니다.' };
+        } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+    }
+    return transactionalInstall(projectRoot, async () => install(projectRoot, selectedEngines, projectType, options));
+}
+
+function prepareSkill(skill, sourcesRoot) {
+    const validation = validateSkill(skill.directory);
+    if (!validSkillName(skill.name)) throw new Error(`올바르지 않은 설치 스킬 이름: ${skill.name}`);
+    if (skill.name === validation.name && !validation.explicitOnly) return { ...skill, validation };
+    const derived = path.join(sourcesRoot, '.derived', skill.sourceId, skill.name);
+    fs.rmSync(derived, { recursive: true, force: true });
+    copyDirectory(skill.directory, derived);
+    const file = path.join(derived, 'SKILL.md');
+    const { document, body } = require('./lib/skills').frontmatter(fs.readFileSync(file, 'utf8'), file);
+    document.set('name', skill.name);
+    fs.writeFileSync(file, `---\n${document.toString()}---\n${body}`, 'utf8');
+    if (validation.explicitOnly) {
+        const nativeFile = path.join(derived, 'agents', 'openai.yaml');
+        const native = fs.existsSync(nativeFile) ? YAML.parseDocument(fs.readFileSync(nativeFile, 'utf8')) : new YAML.Document({});
+        if (native.errors.length) throw new Error(`잘못된 호출 정책: ${nativeFile}`);
+        native.setIn(['policy', 'allow_implicit_invocation'], false);
+        fs.mkdirSync(path.dirname(nativeFile), { recursive: true });
+        fs.writeFileSync(nativeFile, native.toString(), 'utf8');
+    }
+    return { ...skill, directory: derived, validation: validateSkill(derived) };
+}
+
+async function install(projectRoot, selectedEngines, projectType, options) {
+    const log = options.log || console.log;
+    const externalSources = options.profile === 'bundled' ? [] : SKILL_SOURCES;
+    const lock = readLock(projectRoot, __dirname, externalSources, options.frozen);
     const sourcesRoot = path.join(projectRoot, '.ai-core', 'sources');
     fs.mkdirSync(sourcesRoot, { recursive: true });
 
     const skillGroups = [syncBundledSkills(sourcesRoot)];
-    for (const source of SKILL_SOURCES) {
-        skillGroups.push(await syncSource(source, sourcesRoot));
+    for (const source of externalSources) {
+        skillGroups.push(await syncSource(source, sourcesRoot, lock.sources.find((entry) => entry.id === source.id), options));
     }
-    const skills = skillGroups.flat();
+    const requested = options.skills || [];
+    const available = skillGroups.flat();
+    for (const name of requested) if (!available.some((skill) => skill.name === name)) throw new Error(`존재하지 않는 선택 스킬: ${name}`);
+    const skills = available.filter((skill) => skill.sourceId === 'jobkim' || !requested.length || requested.includes(skill.name)).map((skill) => prepareSkill(skill, sourcesRoot));
     validateUniqueSkillNames(skills);
+    for (const skill of skills) for (const warning of skill.validation.warnings) log(`[검토] ${skill.name}: ${warning}`);
 
     const existingProfile = projectType === 'existing' ? inspectExistingProject(projectRoot) : null;
     const targetDirectory = path.join(projectRoot, '.agents', 'skills');
     fs.mkdirSync(targetDirectory, { recursive: true });
-    const installedSkills = skills.filter((skill) => installSkill(skill, targetDirectory));
-    removeStaleManagedSkills(targetDirectory, new Set(installedSkills.map((skill) => skill.name)));
+    const installedSkills = skills.filter((skill) => installSkill(skill, targetDirectory, log));
+    removeStaleManagedSkills(targetDirectory, new Set(installedSkills.map((skill) => skill.name)), log);
     ensureCustomRuleTemplates(projectRoot);
     updateGitignore(projectRoot);
     const policyTargets = installProjectPolicy(
@@ -627,12 +729,15 @@ async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'ex
         selectedEngines,
         existingProfile,
     );
-    writeInstallInfo(projectRoot, projectType, selectedEngines);
-    console.log(`[설치 완료] ${PACKAGE.name} v${PACKAGE.version} 적용 완료 · 공통 Agent Skills: ${installedSkills.length}개`);
-    console.log('       사용자 커스텀 규칙: .agents/rules/project.md (팀 공통) · .agents/rules/local.md (개인 로컬/Git제외)');
+    writeJsonAtomic(path.join(projectRoot, LOCK_NAME), lock);
+    const manifest = buildManifest(projectRoot, installedSkills, policyTargets, { sources: lock.sources.filter((entry) => externalSources.some((source) => source.id === entry.id)) }, options.profile || 'full');
+    writeJsonAtomic(path.join(projectRoot, '.ai-core', 'install-manifest.json'), manifest);
+    writeInstallInfo(projectRoot, projectType, selectedEngines, options);
+    log(`[설치 완료] ${PACKAGE.name} v${PACKAGE.version} 적용 완료 · 공통 Agent Skills: ${installedSkills.length}개`);
+    log('       사용자 커스텀 규칙: .agents/rules/project.md (팀 공통) · .agents/rules/local.md (개인 로컬/Git제외)');
 
     return {
-        skillCount: skills.length,
+        skillCount: installedSkills.length,
         targetCount: 1,
         policyFiles: policyTargets.length,
     };
@@ -655,10 +760,50 @@ async function runCli({
     output = process.stdout,
     projectRoot = process.cwd(),
     synchronize = synchronizeSkills,
+    args = process.argv.slice(2),
+    fetch = request,
 } = {}) {
-    const rl = readline.createInterface({ input, output });
-    const ask = createQuestionReader(rl);
+    let rl;
     try {
+        const options = parseArguments(args);
+        if (options.help) { output.write(HELP); return; }
+        if (options.version) { output.write(`${PACKAGE.version}\n`); return; }
+        projectRoot = options.root || projectRoot;
+        const emit = (value) => output.write(`${JSON.stringify(value, null, 2)}\n`);
+        if (options.command === 'status' || options.command === 'doctor') {
+            const result = status(projectRoot, PACKAGE, SKILL_SOURCES);
+            if (options.json) emit(result);
+            else {
+                output.write(`${result.package}: 설치 ${result.installation?.version || '없음'} / CLI ${result.cliVersion}\n`);
+                for (const issue of result.issues) output.write(`[${issue.severity}] ${issue.path || ''} ${issue.message}\n`);
+            }
+            if (options.command === 'doctor' && !result.healthy) process.exitCode = 1;
+            return result;
+        }
+        if (options.command === 'release-status') { const result = await releaseStatus(PACKAGE, fetch); emit(result); return result; }
+        if (options.command === 'lock') {
+            const lock = options.update ? await resolveLock(SKILL_SOURCES, fetch) : readLock(projectRoot, __dirname, SKILL_SOURCES, options.frozen);
+            if (!options.dryRun) writeJsonAtomic(path.join(projectRoot, LOCK_NAME), lock);
+            emit({ dryRun: options.dryRun, lock }); return lock;
+        }
+        if (options.command === 'validate') {
+            const root = options.root || path.join(__dirname, 'bundled-skills');
+            const directories = fs.existsSync(path.join(root, 'SKILL.md')) ? [root] : findSkillDirectories(root);
+            const results = directories.map((directory) => {
+                try { return { directory, valid: true, ...validateSkill(directory) }; }
+                catch (error) { return { directory, valid: false, error: error.message }; }
+            });
+            const valid = results.length > 0 && results.every((item) => item.valid);
+            emit({ valid, skills: results });
+            if (!valid) process.exitCode = 1;
+            return results;
+        }
+        if (options.json && (!options.projectType || !options.engines)) throw new Error('--json 초기화에는 --type과 --engine을 지정하세요.');
+        let projectType = options.projectType;
+        let selectedEngines = options.engines;
+        if (!projectType || !selectedEngines) {
+            rl = readline.createInterface({ input, output });
+            const ask = createQuestionReader(rl);
         console.log('\n==================================================================');
         console.log('Universal AI-Agent Dev Initializer');
         console.log('==================================================================');
@@ -666,24 +811,25 @@ async function runCli({
         console.log('1) 신규 프로젝트');
         console.log('2) 기존 프로젝트');
 
-        const projectAnswer = await ask('\n번호 입력 (1 또는 2): ');
-        const projectType = parseProjectType(projectAnswer);
+        if (!projectType) projectType = parseProjectType(await ask('\n번호 입력 (1 또는 2): '));
 
         console.log('\n활성화할 AI 엔진을 선택하세요 (복수 선택 가능).');
         console.log('1) Codex');
         console.log('2) Gemini/Antigravity');
 
-        const answer = await ask('\n번호 입력 (1, 2 또는 1,2): ');
-        const selectedEngines = parseSelectedEngines(answer);
-        const result = await synchronize(projectRoot, selectedEngines, projectType);
-        console.log(
-            `\n최신 스킬 ${result.skillCount}개와 프로젝트 정책 ${result.policyFiles}개를 적용했습니다.\n`,
-        );
+        if (!selectedEngines) selectedEngines = parseSelectedEngines(await ask('\n번호 입력 (1, 2 또는 1,2): '));
+        }
+        const installOptions = { ...options, request: fetch, log: options.json ? (message) => process.stderr.write(`${message}\n`) : console.log };
+        const result = args.length ? await synchronize(projectRoot, selectedEngines, projectType, installOptions) : await synchronize(projectRoot, selectedEngines, projectType);
+        if (options.json) emit(result);
+        else output.write(`\n${options.dryRun ? '미리보기 검증' : '적용'}: 스킬 ${result.skillCount}개, 정책 ${result.policyFiles}개\n`);
+        return result;
     } catch (error) {
-        console.error(`\n[오류] ${error.message}\n`);
+        if (args.includes('--json')) output.write(`${JSON.stringify({ error: error.message })}\n`);
+        else console.error(`\n[오류] ${error.message}\n`);
         process.exitCode = 1;
     } finally {
-        rl.close();
+        rl?.close();
     }
 }
 
@@ -692,6 +838,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+    request,
+    downloadSource,
+    syncSource,
+    prepareSkill,
     assertSafeRelativePath,
     copyDirectory,
     createQuestionReader,

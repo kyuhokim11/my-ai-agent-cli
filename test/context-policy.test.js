@@ -56,7 +56,8 @@ for (const projectType of ['new', 'existing']) {
                 assert.equal(fs.existsSync(path.join(target, 'jobkim-project-intake', 'SKILL.md')), true);
                 for (const file of targets) {
                     const content = fs.readFileSync(path.join(root, file), 'utf8');
-                    assert.ok(content.startsWith('기록 원본: project-notes/active.md\n'));
+                    const body = file === '.agents/rules/jobkim.md' ? require('../lib/skills').frontmatter(content).body : content;
+                    assert.ok(body.startsWith('기록 원본: project-notes/active.md\n'));
                     assert.ok(content.endsWith('사용자 후속 지침\n'));
                     assert.equal(content.includes('legacy-managed-policy'), false);
                     assert.ok(content.includes(fs.readFileSync(path.join(repositoryRoot, 'rules/core.md'), 'utf8').trim()));
