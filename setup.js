@@ -10,7 +10,7 @@ const { ENGINES, expandEngines, instructionChain, policyPaths, skillTargets } = 
 const { LOCK_NAME, validateSource, resolveLock, readLock, writeJsonAtomic, snapshotFiles, verifyCachedSource } = require('./lib/source-lock');
 const { cloneInstallState, applyInstallationPlan, exists: pathExists } = require('./lib/transaction');
 const { buildManifest, status } = require('./lib/diagnostics');
-const { CONFIG_NAME, readJson, resolveConfiguration } = require('./lib/configuration');
+const { CONFIG_NAME, readJson, readConfiguration, resolveConfiguration } = require('./lib/configuration');
 const { SKILL_ROOTS, readManifest, skillPath, managedSkill, installConflicts, createInstallationPlan, conflictError } = require('./lib/installation-plan');
 const policies = require('./lib/policies');
 const { parseArguments, HELP } = require('./lib/cli');
@@ -819,7 +819,7 @@ async function runCli({
             if (!valid) process.exitCode = 1;
             return results;
         }
-        const saved = null;
+        const saved = readConfiguration(projectRoot);
         const interactive = args.length === 0 || (!options.json && !options.projectType && !saved) || (!options.json && !options.engines && !options.addEngines && !saved);
         if (interactive) {
             rl = readline.createInterface({ input, output });
