@@ -13,7 +13,7 @@
 
 ## 사용 방법
 
-Node.js 18 이상과 GitHub에 연결할 수 있는 네트워크가 필요합니다. 기존 작업이 있다면 먼저 Git 상태를 확인하거나 백업해 두세요.
+최소 실행 선언은 Node.js 18 이상이며, 보안 지원 중인 Node.js 22·24·26 LTS를 권장합니다. 외부 스킬을 설치하려면 GitHub 네트워크가 필요합니다. 기존 작업이 있다면 먼저 Git 상태를 확인하거나 백업해 두세요.
 
 설정할 프로젝트의 루트 폴더에서 실행합니다.
 
@@ -47,6 +47,19 @@ npx @jobbykim/ai-init
 
 선택한 엔진의 지침만 생성합니다. 기존 지침은 보존하고 ai-init이 추가한 구간을 갱신합니다. 같은 이름의 사용자 스킬이 있으면 덮어쓰지 않고 건너뜁니다.
 
+제품별 선택·미리보기·진단도 제공합니다. 아래는 이 저장소의 개발 소스 기준이며 `--root`는 실제 대상 경로로 바꿉니다. npm 패키지를 사용할 때는 해당 버전의 `npx @jobbykim/ai-init` 뒤에 같은 인자를 붙입니다.
+
+```powershell
+node setup.js init --root C:/dev/example --type existing --engine codex,antigravity --profile bundled --dry-run --json
+node setup.js init --root C:/dev/example --type existing --engine codex,antigravity --profile bundled
+node setup.js status --root C:/dev/example --json
+node setup.js doctor --root C:/dev/example --json
+```
+
+`--profile full`은 자체·외부 스킬을, `bundled`는 자체 스킬만 설치합니다. `--skill NAME`을 반복하면 외부 스킬을 선택하며 자체 스킬은 유지합니다. 선택에서 빠진 ai-init 관리 스킬은 제거되므로 범위를 바꿀 때 먼저 미리보기를 확인합니다. 기존 대화형 번호 `1`, `2`, `1,2`는 유지하며 옵션에서는 `codex`, `gemini`, `antigravity`를 각각 선택할 수 있습니다.
+
+Antigravity 관리 규칙과 새 템플릿에는 YAML `trigger`를 포함합니다. 기존 사용자 `project.md`·`local.md`는 자동 수정하지 않고 `doctor`에서 누락을 안내합니다. Codex의 루트 `AGENTS.override.md`가 활성 상태라면 그 파일의 관리 구간을 갱신합니다. Claude Code 전용 설치는 현재 지원 범위에 포함하지 않습니다.
+
 ### 사용자 및 프로젝트 커스텀 규칙
 
 `.agents/rules/` 디렉터리에 사용자 정의 프롬프트를 위한 두 개의 파일이 함께 제공됩니다:
@@ -67,7 +80,16 @@ npx @jobbykim/ai-init
 npx @jobbykim/ai-init@latest
 ```
 
-자체 규칙과 스킬은 npm 패키지 버전을 따르고, 외부 스킬은 실행할 때 지정된 GitHub 브랜치에서 가져옵니다. npm 버전을 고정해도 외부 스킬 내용은 바뀔 수 있습니다. 동기화에 실패하면 이전 캐시를 사용하고, 캐시가 없는 최초 설치는 중단합니다.
+자체 규칙·스킬과 기본 외부 스냅샷은 npm 패키지 버전에 포함됩니다. 최초 적용은 패키지의 `skill-sources.lock.json`을 사용하고, 대상 프로젝트의 `ai-init.lock.json`에 commit/tree SHA를 보존합니다. 이 파일은 Git으로 공유합니다. 이후 설치는 프로젝트 잠금을 사용하며 `--frozen`은 기존 잠금을 필수로 요구합니다. 캐시는 잠금 SHA와 기록된 파일 무결성이 일치할 때만 재사용합니다.
+
+외부 업데이트는 설치와 분리해 명시적으로 준비합니다. 잠금 변경은 콘텐츠의 안전성을 보증하지 않으므로 스킬·스크립트·권한·라이선스 변경을 검토한 뒤 적용합니다.
+
+```powershell
+node setup.js lock --root C:/dev/example --update --dry-run
+node setup.js lock --root C:/dev/example --update
+# 잠금 diff 검토 후 적용합니다.
+node setup.js init --root C:/dev/example --type existing --engine codex --frozen
+```
 
 `1.2.0`부터 마지막으로 성공한 적용 버전과 시각을 `.ai-core/install-info.json`에 기록합니다. 이 파일을 직접 열거나 PowerShell에서 확인할 수 있습니다.
 
@@ -75,7 +97,7 @@ npx @jobbykim/ai-init@latest
 Get-Content .ai-core/install-info.json
 ```
 
-실패한 재실행에서는 이전 기록이 유지되지만 일부 파일은 변경됐을 수 있습니다.
+설치 오류 시 관리 대상 캐시·스킬·규칙·설치 정보를 백업에서 복구합니다. 복구까지 실패하면 백업 위치와 실패 경로를 출력하며 성공으로 표시하지 않습니다. 프로세스 강제 종료나 전원 장애의 복구까지 보장하지는 않습니다. `status`의 해시는 설치 후 차이를 찾기 위한 정보이며 악의적인 로컬 기록 전체 변조에 대한 서명 검증은 아닙니다.
 
 ### 기존 프로젝트 업데이트
 
@@ -89,7 +111,9 @@ Get-Content .ai-core/install-info.json
 
 에이전트가 지침을 항상 지킨다고 보장하지는 않습니다. 스킬 인식과 실행은 사용하는 에이전트에 따라 확인해야 하며, 원본 플러그인의 전체 동작과 같지는 않습니다. 설치만으로 과거 작업 이력이 생기거나 모델이 학습되는 것도 아닙니다.
 
-외부 스킬을 내려받는 데 시간이 걸릴 수 있고, 현재 자동 제거 명령은 없습니다. macOS와 Linux 실환경 검증은 아직 진행하지 않았습니다.
+외부 스킬을 내려받는 데 시간이 걸릴 수 있고, 현재 자동 제거 명령은 없습니다. `--dry-run`도 임시 사본에서 다운로드·검증하므로 네트워크와 임시 공간이 필요합니다. 정책·스킬 파일의 변경 목록을 제공하며 대상 프로젝트는 수정하지 않습니다. 설치 정보·캐시·잠금·새 템플릿도 실제 적용 때 갱신됩니다. macOS/Linux 실환경 결과는 CI 실행 후 별도로 확인합니다.
+
+`validate`는 YAML·이름·참조·호환 메타데이터를 검사하며 스킬 코드를 실행하지 않습니다. 설치 성공은 실제 에이전트 행동 평가와 구분합니다. 사용자 호출 전용으로 선언된 스킬은 원본을 보존한 파생본에서 Codex 호출 정책을 연결합니다. Gemini/Antigravity에서 같은 native 제한을 보장하지 않으며 `doctor`가 안내합니다. 설치는 실행 권한·샌드박스 설정을 완화하지 않습니다.
 
 ## 더 알아보기
 

@@ -4,8 +4,8 @@
 
 ## 지금 확인할 곳
 
-- 다음 버전 변경 상세·검증·전환: [v1.4.0 준비 기록](#v140-변경-상세와-릴리스-준비)
-- 최근 공개 릴리스 결과: [v1.3.0 릴리스 기록](#v130-릴리스-기록)
+- 다음 버전 구현·커밋·버전 계획: [v1.5.0-rc.1 계획](#v150-rc1-구현과-릴리스-계획)
+- 최근 공개 릴리스 결과: [v1.4.0 게시 확인](#v140-게시-확인)
 - 커밋부터 게시까지 실행 순서: [릴리스 절차](#릴리스-절차)
 - Git과 npm을 맞춰야 하는 범위: [일치 기준](#git과-npm의-일치-기준)
 - 목적·분야별 적용 기준: [시스템 전략](system-strategy.md)
@@ -18,6 +18,96 @@ README는 기능·설치·사용·업데이트 안내를 중심으로 유지한�
 코드·문서 수정과 검증은 에이전트가 준비한다. Git 스테이징·커밋·푸시·태그, npm 인증·게시, 패키지 삭제·접근 권한 변경과 운영 배포는 사용자가 직접 수행한다. 특정 단계만 일회성으로 맡길 수 있으며, 그 권한은 다음 단계로 이어지지 않는다. 에이전트는 목적·범위·대상 파일과 검증 방법을 먼저 제시한다.
 
 npm 계정과 scope는 `jobbykim`, 저자는 `jobkim`, GitHub 소유자는 `kyuhokim11`이다. 비밀번호·토큰·2FA 코드와 복구 코드는 기록하지 않는다.
+
+## v1.5.0-rc.1 구현과 릴리스 계획
+
+기록일: 2026-11-17, Asia/Seoul. 높은 우선순위 항목을 구현한 개발 소스다. 현재 미커밋이며 새 태그·푸시·npm 게시는 수행하지 않았다. 공개 1.4.0과 준비 중 1.5.0-rc.1을 구분한다.
+
+### 항목별 구현과 버전
+
+| 순위 | 항목 | 구현한 범위 | 커밋 | 반영 버전 |
+|---|---|---|---|---|
+| 1 | Antigravity 호환성 | 관리 규칙·새 템플릿 trigger, 사용자 파일 보존·진단 | C2, C4 | 1.5.0-rc.1 → 1.5.0 |
+| 2 | 스킬 규격 | 정식 YAML 파서, 필수 필드·이름·참조·Unicode 검사 | C1, C4 | 1.5.0-rc.1 → 1.5.0 |
+| 3 | 제품별 어댑터 | codex/gemini/antigravity 선택, 기존 1/2 입력 유지 | C2, C4 | 1.5.0-rc.1 → 1.5.0 |
+| 4 | 지침 계층 | Codex override, 커스텀 Codex.md 관례 분리 | C2, C4 | 1.5.0-rc.1 → 1.5.0 |
+| 5 | 맥락·설치 범위 | full/bundled, 외부 스킬 선택, 자체 설명 축소 | C2, C4 | 1.5.0-rc.1 → 1.5.0 |
+| 6 | 사용자 호출 전용 | 원본 정책 보존·Codex 파생 메타데이터 연결 | C1, C4 | 1.5.0-rc.1 → 1.5.0 |
+| 7 | 행동 평가 | 12개 시나리오·증거 채점기, 미실행/미검토 분리 | C4, C5 | 도구 1.5.0-rc.1, 행동 결과 별도 |
+| 8 | 소스 재현성 | 패키지/프로젝트 잠금, commit/tree·라이선스 검증 | C3, C4 | 1.5.0-rc.1 → 1.5.0 |
+| 9 | 외부 지침 신뢰 | 호스트·경로·링크 제한, 무결성, 원본/파생본 분리 | C1, C3, C4 | 1.5.0-rc.1 → 1.5.0 |
+| 10 | npm 처리 대기 | release-status, 조회 불가와 공개/latest 분리 | C4, C6 | 1.5.0-rc.1 → 1.5.0 |
+| 11 | 지원 환경 | 권장 LTS 안내, 3개 OS/Node 22·24·26 CI, npm 12 작업 | C5, C6 | 안내·CI 1.5.0, 최소 상향은 2.0 후보 |
+| 12 | 진단·실패 복구 | status/doctor/JSON/dry-run, 관리 대상 백업·복구 | C4 | 1.5.0-rc.1 → 1.5.0 |
+
+공통 설치 경로를 쓰므로 기능마다 npm 버전을 올리지 않는다. 여섯 커밋을 하나의 minor 릴리스로 검증한다. 기존 대화형 실행과 최소 Node 18 선언은 유지한다. 엄격한 스킬 검증·잠금 도입의 전환 영향은 RC에서 확인하며 사용자 템플릿은 자동 이전하지 않는다.
+
+### 커밋 계획
+
+사용자가 직접 실행한다. 다음은 의존 순서이며 중간 커밋은 개별 배포 대상이 아니다. 공통 파일은 git add -p로 해당 묶음만 스테이징하고 diff를 확인한다. 기능 연결을 나누기 어렵다면 C1~C4를 하나로 합쳐 실행 가능한 상태를 유지한다.
+
+| 순서 | 제안 메시지 | 대상 |
+|---|---|---|
+| C1 | build: YAML 검증 의존성과 1.5.0 RC 준비 | package.json, package-lock.json, .gitignore, lib/skills.js |
+| C2 | feat: 제품별 규칙과 지침 탐색 계층 정리 | lib/engines.js, lib/cli.js, rules/core.md, 자체 SKILL.md 2개 |
+| C3 | feat: 외부 스킬 소스 잠금과 무결성 검증 추가 | lib/source-lock.js, skill-sources.lock.json, scripts/update-source-lock.js |
+| C4 | feat: 안전한 설치와 상태 진단 CLI 연결 | setup.js, lib/transaction.js, lib/diagnostics.js, lib/release-status.js, lib/evaluation.js, test/context-policy.test.js, test/modernization.test.js |
+| C5 | test: 행동 평가 시나리오와 환경별 CI 추가 | evals/cases.json, scripts/evaluate.js, scripts/smoke-install.js, .github/ |
+| C6 | docs: 1.5.0 전환과 커밋 및 릴리스 계획 기록 | README.md, docs/manual-operations.md, docs/project-context-policy-design.md |
+
+공통 확인 명령:
+
+```powershell
+git diff --check
+git diff --cached --check
+git diff --cached
+npm test
+npm run validate:skills
+npm pack --dry-run --ignore-scripts
+```
+
+### 버전 진행과 게시 계획
+
+| 버전 | 용도와 조건 |
+|---|---|
+| 1.4.0 | 현재 공개 버전·태그 유지 |
+| 1.5.0-rc.1 | 현재 개발 소스. 전체 커밋·검증 후 next 태그로 선택 게시 |
+| 1.5.0-rc.2 이상 | RC 수정 시 새 prerelease. 게시한 RC는 재사용하지 않음 |
+| 1.5.0 | CI와 실제 제품 인식·설치·재설치 전환 확인 후 안정 배포 |
+| 1.5.x | 안정 배포 이후 호환 버그 수정 |
+| 1.6.0 이상 | 추가적인 하위 호환 기능은 별도 릴리스 |
+| 2.0.0 후보 | 최소 Node 상향, 기존 명령/설정 계약 제거 등 비호환 변경 |
+
+아래는 RC 게시를 선택할 때의 명령이며 이번 실행 결과가 아니다. 인증·미게시 여부·작업 트리·전체 테스트를 먼저 확인한다. 태그는 검증한 전체 커밋을 가리킨다.
+
+```powershell
+npm whoami --registry=https://registry.npmjs.org/
+npm view @jobbykim/ai-init@1.5.0-rc.1 version --registry=https://registry.npmjs.org/
+npm publish --dry-run --registry=https://registry.npmjs.org/
+git tag -a v1.5.0-rc.1 -m "release: v1.5.0-rc.1"
+npm publish --access public --tag next --registry=https://registry.npmjs.org/
+node setup.js release-status
+npm view @jobbykim/ai-init dist-tags --json --registry=https://registry.npmjs.org/
+```
+
+게시 성공 문구는 접수이며 공개 시각과 다를 수 있다. not-visible은 미게시와 검사 처리 대기를 구분할 수 없는 상태다. 게시 출력과 대조하고 처리 중이면 재게시하지 말고 제한된 재조회를 수행한다. RC는 next를 확인하며 기존 latest를 바꾸지 않는다. 새 시험 폴더에서 해당 RC 설치·재설치를 확인한 뒤 git push origin v1.5.0-rc.1을 실행한다. 처리 시간을 보장하지 않는다.
+
+안정판 전환은 단순 dist-tag 이동이 아니라 package.json/package-lock.json을 1.5.0으로 바꾸고 전체 검증·릴리스 커밋·새 태그·게시를 수행한다. 최소 Node 18 선언 상향은 이번에 수행하지 않았다.
+
+### 검증과 남은 확인
+
+- Windows / Node 22.22.2 / npm 10.9.7: 자동 테스트 43개 통과. YAML·규칙 보정·원본/파생본·SHA/라이선스·복구·JSON·미리보기·진단·채점기 포함.
+- 실제 잠금 소스 네트워크 미리보기: 스킬 53개·정책 3개, 대상 변경 없음. 내려받은 스크립트는 실행하지 않음.
+- 실제 Codex/Gemini/Antigravity 인식·호출과 행동 시나리오는 미수행. 설치 테스트를 행동 품질의 증거로 취급하지 않음.
+- macOS/Linux·Node 24/26·npm 12는 CI 작업을 준비했으며 실제 결과는 실행 후 기록.
+- dry-run 상세 diff는 정책·스킬 중심. 잠금·캐시·설치 정보·새 템플릿도 실제 적용 때 쓰는 항목임을 결과에 명시.
+- 복구는 실행 중 잡힌 오류에 대한 관리 경로 복원이다. 강제 종료·전원 장애·동시 설치를 보장하지 않는다. 로컬 해시는 기록 전체의 악의적 변조에 대한 서명 검증이 아니다.
+
+근거: [Agent Skills](https://agentskills.io/specification), [Antigravity 규칙](https://antigravity.google/docs/rules), [Codex 지침](https://learn.chatgpt.com/docs/agent-configuration/agents-md), [호출 정책](https://learn.chatgpt.com/docs/build-skills), [OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Secure_Coding_with_AI_Cheat_Sheet.html), [npm 게시 검사](https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/), [Node 릴리스](https://nodejs.org/en/about/previous-releases).
+
+## v1.4.0 게시 확인
+
+확인일: 2026-11-17, Asia/Seoul. 공식 npm 조회에서 공개 버전과 latest가 1.4.0임을 확인했고 gitHead는 f09a671d6485908b375018209cdc00ea8b70bc8c였다. 로컬·원격 v1.4.0 태그도 같은 커밋으로 확인했다. 사용자가 공개 실행 정상 동작을 보고했다. 전체 6개 조합 실사용까지 확인한 것으로 확대하지 않는다. 아래 11월 6일 기록은 당시 스냅샷으로 보존한다.
 
 ## v1.4.0 변경 상세와 릴리스 준비
 
