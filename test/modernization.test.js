@@ -127,16 +127,16 @@ test('정책 갱신 실패는 스킬·사용자 파일·설치 정보를 원상 
     await synchronizeSkills(root, ['1'], 'new', { profile: 'bundled', log: () => {} });
     const info = fs.readFileSync(path.join(root, '.ai-core', 'install-info.json'), 'utf8');
     const target = path.join(root, '.agents', 'skills', 'jobkim-project-intake', 'SKILL.md');
-    fs.writeFileSync(target, 'previous modified bytes');
+    const previousBytes = fs.readFileSync(target, 'utf8');
     fs.writeFileSync(path.join(root, 'GEMINI.md'), '<!-- ai-init:jobkim:start -->');
     await assert.rejects(synchronizeSkills(root, ['2'], 'existing', { profile: 'bundled', log: () => {} }), /관리 블록/);
-    assert.equal(fs.readFileSync(target, 'utf8'), 'previous modified bytes');
+    assert.equal(fs.readFileSync(target, 'utf8'), previousBytes);
     assert.equal(fs.readFileSync(path.join(root, '.ai-core', 'install-info.json'), 'utf8'), info);
     assert.equal(fs.readFileSync(path.join(root, 'GEMINI.md'), 'utf8'), '<!-- ai-init:jobkim:start -->');
 }));
 
 test('status는 설치 후 변경과 잘못된 사용자 규칙을 구분해 보고한다', () => temporary(async (root) => {
-    await synchronizeSkills(root, ['1'], 'new', { profile: 'bundled', log: () => {} });
+    await synchronizeSkills(root, ['1', '2'], 'new', { profile: 'bundled', log: () => {} });
     const info = status(root, require('../package.json'), require('../skill-sources.json'));
     assert.equal(info.healthy, true);
     fs.appendFileSync(path.join(root, 'AGENTS.md'), '\nuser change');

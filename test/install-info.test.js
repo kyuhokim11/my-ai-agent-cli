@@ -39,8 +39,9 @@ test('성공한 설치의 버전과 선택을 기록하고 실패 시 마지막 
                 assert.equal(fs.readFileSync(path.join(installed, 'SKILL.md'), 'utf8'),
                     fs.readFileSync(path.join(__dirname, '..', 'bundled-skills', 'jobkim-project-context', 'SKILL.md'), 'utf8'));
                 assert.ok(fs.existsSync(path.join(installed, '_UPSTREAM_LICENSE')));
-                // 다음 재설치에서 이전 캐시 내용이 실제 번들로 갱신되는지도 확인한다.
-                fs.writeFileSync(path.join(installed, 'SKILL.md'), '# stale cache');
+                // 설치본은 독립 복사본이다. 번들 캐시 갱신은 설치본을 바꾸지 않는다.
+                fs.writeFileSync(path.join(root, '.ai-core', 'sources', 'jobkim', 'jobkim-project-context', 'SKILL.md'), '# stale cache');
+                assert.equal(fs.lstatSync(installed).isSymbolicLink(), false);
             }
         }
         assert.match(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), /\.ai-core\/install-info\.json/);
@@ -63,11 +64,11 @@ test('반복 동기화에서도 표식 없는 사용자 스킬은 보존한다',
         fs.mkdirSync(userSkill, { recursive: true });
         fs.writeFileSync(path.join(userSkill, 'SKILL.md'), '# 사용자 원본');
         for (let run = 0; run < 2; run += 1) {
-            await synchronizeSkills(root, ['1'], 'new');
+            await assert.rejects(synchronizeSkills(root, ['1'], 'new'), /설치 충돌/);
             assert.equal(fs.readFileSync(path.join(userSkill, 'SKILL.md'), 'utf8'), '# 사용자 원본');
             assert.equal(fs.existsSync(path.join(userSkill, '.ai-init-source.json')), false);
-            const managed = JSON.parse(fs.readFileSync(path.join(root, '.agents', 'skills', '.ai-init-managed.json'), 'utf8'));
-            assert.deepEqual(managed.skills, ['jobkim-project-intake']);
+            assert.equal(fs.existsSync(path.join(root, 'ai-init.json')), false);
+            assert.equal(fs.existsSync(path.join(root, '.agents', 'skills', '.ai-init-managed.json')), false);
         }
     } finally {
         sources.push(...originalSources);

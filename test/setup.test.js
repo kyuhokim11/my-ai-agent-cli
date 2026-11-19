@@ -51,7 +51,8 @@ test('연속된 기존 프로젝트와 Gemini 선택을 동기화 단계에 전�
         },
     });
 
-    assert.deepEqual(received, ['example-project', ['2'], 'existing']);
+    assert.deepEqual(received.slice(0, 3), ['example-project', ['gemini', 'antigravity'], 'existing']);
+    assert.equal(received[3].profile, 'full');
     await new Promise((resolve) => output.end(resolve));
 });
 
@@ -63,14 +64,16 @@ test('프로젝트와 엔진 선택을 해석하고 잘못된 번호를 거부�
     assert.deepEqual(parseSelectedEngines('2'), ['2']);
     assert.deepEqual(parseSelectedEngines('1,2'), ['1', '2']);
     assert.deepEqual(parseSelectedEngines(' 2, 1,2 '), ['2', '1']);
-    assert.throws(() => parseSelectedEngines(''), /1, 2 또는 1,2/);
-    assert.throws(() => parseSelectedEngines('1,3'), /1, 2 또는 1,2/);
+    assert.deepEqual(parseSelectedEngines('1,3'), ['1', '3']);
+    assert.deepEqual(parseSelectedEngines('4'), ['4']);
+    assert.throws(() => parseSelectedEngines(''), /1, 2, 3, 4/);
+    assert.throws(() => parseSelectedEngines('1,5'), /1, 2, 3, 4/);
 });
 
 test('잘못된 엔진 선택은 파일 생성 전에 거부한다', async () => {
     const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-init-test-'));
     try {
-        await assert.rejects(() => synchronizeSkills(tempDirectory, ['3'], 'new'), /1, 2 또는 1,2/);
+        await assert.rejects(() => synchronizeSkills(tempDirectory, ['5'], 'new'), /지원 엔진/);
         assert.deepEqual(fs.readdirSync(tempDirectory), []);
     } finally {
         fs.rmSync(tempDirectory, { recursive: true, force: true });
@@ -191,15 +194,16 @@ test('기존 gitignore를 보존하고 ai-init 관리 항목만 갱신한다', (
         const gitignorePath = path.join(tempDirectory, '.gitignore');
         fs.writeFileSync(gitignorePath, 'node_modules/\n');
 
-        updateGitignore(tempDirectory);
-        updateGitignore(tempDirectory);
+        updateGitignore(tempDirectory, [{ path: '.agents/skills/jobkim-project-context' }]);
+        updateGitignore(tempDirectory, [{ path: '.agents/skills/jobkim-project-context' }]);
 
         const content = fs.readFileSync(gitignorePath, 'utf8');
         assert.match(content, /node_modules\//);
         assert.match(content, /\/\.ai-core\//);
         assert.match(content, /\/\.agents\/rules\/jobkim\.md/);
         assert.match(content, /\/\.agents\/rules\/local\.md/);
-        assert.match(content, /\/\.agents\/skills\//);
+        assert.match(content, /\/\.agents\/skills\/jobkim-project-context\//);
+        assert.ok(!content.split('\n').includes('/.agents/skills/'));
         assert.doesNotMatch(content, /\/\.agents\/rules\/project\.md/);
         assert.doesNotMatch(content, /AGENTS\.md|GEMINI\.md/);
         assert.equal(content.match(/# ai-init:managed:start/g).length, 1);

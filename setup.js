@@ -6,13 +6,15 @@ const path = require('path');
 const readline = require('readline');
 const os = require('os');
 const { validateSkill, antigravityRule, validSkillName } = require('./lib/skills');
-const { ENGINES, expandEngines, instructionChain, policyPaths } = require('./lib/engines');
+const { ENGINES, expandEngines, instructionChain, policyPaths, skillTargets } = require('./lib/engines');
 const { LOCK_NAME, validateSource, resolveLock, readLock, writeJsonAtomic, snapshotFiles, verifyCachedSource } = require('./lib/source-lock');
-const { transactionalInstall, cloneInstallState, exists: pathExists } = require('./lib/transaction');
-const { buildManifest, status, installationDiff } = require('./lib/diagnostics');
+const { cloneInstallState, applyInstallationPlan, exists: pathExists } = require('./lib/transaction');
+const { buildManifest, status } = require('./lib/diagnostics');
+const { CONFIG_NAME, readJson, resolveConfiguration } = require('./lib/configuration');
+const { SKILL_ROOTS, readManifest, skillPath, managedSkill, installConflicts, createInstallationPlan, conflictError } = require('./lib/installation-plan');
+const policies = require('./lib/policies');
 const { parseArguments, HELP } = require('./lib/cli');
 const { releaseStatus } = require('./lib/release-status');
-const YAML = require('yaml');
 
 const SKILL_SOURCES = require('./skill-sources.json');
 const PACKAGE = require('./package.json');
@@ -263,18 +265,6 @@ async function downloadSource(source, stagingRoot, locked, fetch = request) {
 }
 
 function replaceDirectory(stagingRoot, sourceRoot) {
-    // 설치 대상 링크도 이 캐시를 가리키므로 교체 전에 관리 소유권을 보존한다.
-    if (fs.existsSync(sourceRoot)) {
-        for (const previousDirectory of findSkillDirectories(sourceRoot)) {
-            const marker = readManagedMarker(previousDirectory);
-            const nextDirectory = path.join(stagingRoot, path.relative(sourceRoot, previousDirectory));
-            if (marker?.managedBy === USER_AGENT &&
-                typeof marker.sourceId === 'string' &&
-                fs.existsSync(path.join(nextDirectory, 'SKILL.md'))) {
-                fs.writeFileSync(path.join(nextDirectory, MANAGED_MARKER), `${JSON.stringify(marker, null, 2)}\n`, 'utf8');
-            }
-        }
-    }
     const backupRoot = `${sourceRoot}.backup`;
     fs.rmSync(backupRoot, { recursive: true, force: true });
 
@@ -422,17 +412,12 @@ function installSkill(skill, targetRoot, log = console.log) {
         sourceId: skill.sourceId,
         repository: skill.repository,
     };
-    fs.writeFileSync(path.join(skill.directory, MANAGED_MARKER), `${JSON.stringify(marker, null, 2)}\n`, 'utf8');
-    for (const legalFile of skill.legalFiles || []) {
-        fs.copyFileSync(legalFile.path, path.join(skill.directory, legalFile.fileName));
-    }
-    fs.rmSync(destination, { recursive: true, force: true });
-
-    try {
-        fs.symlinkSync(skill.directory, destination, process.platform === 'win32' ? 'junction' : 'dir');
-    } catch (error) {
-        copyDirectory(skill.directory, destination);
-    }
+    const resolvedTarget = path.resolve(targetRoot), resolvedDestination = path.resolve(destination);
+    if (path.dirname(resolvedDestination) !== resolvedTarget) throw new Error('스킬 설치 경로가 대상 밖입니다.');
+    fs.rmSync(resolvedDestination, { recursive: true, force: true });
+    copyDirectory(skill.directory, destination);
+    fs.writeFileSync(path.join(destination, MANAGED_MARKER), `${JSON.stringify(marker, null, 2)}\n`, 'utf8');
+    for (const legalFile of skill.legalFiles || []) fs.copyFileSync(legalFile.path, path.join(destination, legalFile.fileName));
     return true;
 }
 
@@ -481,8 +466,8 @@ function validateUniqueSkillNames(skills) {
 
 function parseSelectedEngines(answer) {
     const selectedEngines = [...new Set(answer.split(',').map((item) => item.trim()))];
-    if (selectedEngines.length === 0 || selectedEngines.some((engine) => engine !== '1' && engine !== '2')) {
-        throw new Error('활성화할 AI 엔진 번호로 1, 2 또는 1,2를 입력하세요.');
+    if (selectedEngines.length === 0 || selectedEngines.some((engine) => !['1', '2', '3', '4'].includes(engine))) {
+        throw new Error('활성화할 AI 엔진 번호로 1, 2, 3, 4 또는 쉼표로 복수 선택을 입력하세요.');
     }
     return selectedEngines;
 }
@@ -498,51 +483,26 @@ function parseProjectType(answer) {
 }
 
 function renderProjectPolicy(projectType) {
-    const coreRules = fs.readFileSync(path.join(__dirname, 'rules', 'core.md'), 'utf8').trim();
-    const modeFile = projectType === 'existing' ? 'existing-project.md' : 'new-project.md';
-    const modeRules = fs.readFileSync(path.join(__dirname, 'rules', modeFile), 'utf8').trim();
-    const installationNote = '마지막으로 성공한 ai-init 적용 정보는 `.ai-core/install-info.json`에서 확인한다. 실패한 재실행의 부분 변경이나 외부 스킬 버전까지 보증하는 정보는 아니다.';
-    return `${MANAGED_BLOCK_START}\n${coreRules}\n\n${modeRules}\n\n${installationNote}\n${MANAGED_BLOCK_END}`;
+    return policies.renderProjectPolicy(projectType);
 }
 
 function upsertDelimitedBlock(filePath, block, startMarker, endMarker) {
-    let currentContent = '';
-    if (fs.existsSync(filePath)) {
-        currentContent = fs.readFileSync(filePath, 'utf8');
-    }
-
-    const startIndex = currentContent.indexOf(startMarker);
-    const endIndex = currentContent.indexOf(endMarker);
-    let nextContent;
-
-    if (startIndex === -1 && endIndex === -1) {
-        const separator = currentContent.length > 0 && !currentContent.endsWith('\n') ? '\n\n' : currentContent.length > 0 ? '\n' : '';
-        nextContent = `${currentContent}${separator}${block}\n`;
-    } else if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
-        nextContent = `${currentContent.slice(0, startIndex)}${block}${currentContent.slice(
-            endIndex + endMarker.length,
-        )}`;
-        if (!nextContent.endsWith('\n')) {
-            nextContent += '\n';
-        }
-    } else {
-        throw new Error(`관리 블록 마커가 손상되어 파일을 안전하게 갱신할 수 없습니다: ${filePath}`);
-    }
-
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, nextContent, 'utf8');
+    policies.upsertDelimitedBlock(filePath, block, startMarker, endMarker);
 }
 
 function upsertManagedBlock(filePath, block) {
     upsertDelimitedBlock(filePath, block, MANAGED_BLOCK_START, MANAGED_BLOCK_END);
 }
 
-function updateGitignore(projectRoot) {
+function updateGitignore(projectRoot, installedSkills = []) {
     const entries = [
         '/.ai-core/',
         '/.agents/rules/jobkim.md',
         '/.agents/rules/local.md',
-        '/.agents/skills/',
+        '/CLAUDE.local.md',
+        '/.claude/settings.local.json',
+        ...[...new Set(installedSkills.map((skill) => path.posix.dirname(skill.path)))].map((directory) => `/${directory}/.ai-init-managed.json`),
+        ...installedSkills.map((skill) => `/${skill.path}/`),
     ];
     const block = `${GITIGNORE_BLOCK_START}\n${entries.join('\n')}\n${GITIGNORE_BLOCK_END}`;
     upsertDelimitedBlock(
@@ -578,6 +538,8 @@ function inspectExistingProject(projectRoot) {
         '.agents/rules/local.md',
         'GEMINI.md',
         'CLAUDE.md',
+        '.claude/CLAUDE.md',
+        'CLAUDE.local.md',
         'README.md',
         'README',
     ];
@@ -615,12 +577,7 @@ function inspectExistingProject(projectRoot) {
 }
 
 function installProjectPolicy(projectRoot, projectType, selectedEngines, existingProfile) {
-    const block = renderProjectPolicy(projectType);
-    const policyTargets = policyPaths(projectRoot, selectedEngines).map((file) => path.join(projectRoot, file));
-    for (const target of policyTargets) {
-        upsertManagedBlock(target, block);
-        if (target === path.join(projectRoot, '.agents', 'rules', 'jobkim.md')) fs.writeFileSync(target, antigravityRule(fs.readFileSync(target, 'utf8')), 'utf8');
-    }
+    const policyTargets = policies.installPolicies(projectRoot, projectType, selectedEngines);
 
     if (projectType === 'existing') {
         const profilePath = path.join(projectRoot, '.ai-core', 'project-profile.json');
@@ -640,6 +597,8 @@ function writeInstallInfo(projectRoot, projectType, selectedEngines, options = {
         appliedAt: new Date().toISOString(),
         projectType,
         engines: selectedEngines.map((engine) => engine === '1' ? 'Codex' : engine === '2' ? 'Gemini/Antigravity' : ENGINES[engine]?.label || engine),
+        engineIds: expandEngines(selectedEngines),
+        skills: options.skills || [],
         profile: options.profile || 'full',
     };
     try {
@@ -655,47 +614,55 @@ async function synchronizeSkills(projectRoot, selectedEngines, projectType = 'ex
     if (!['new', 'existing'].includes(projectType)) throw new Error('프로젝트 유형: new 또는 existing');
     if (!['full', 'bundled'].includes(options.profile || 'full')) throw new Error('설치 프로필: full 또는 bundled');
     projectRoot = path.resolve(projectRoot);
-    if (options.dryRun) {
-        const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-init-preview-'));
-        try {
-            cloneInstallState(projectRoot, temporary);
-            let previous = null;
-            try { previous = JSON.parse(fs.readFileSync(path.join(projectRoot, '.ai-core', 'install-manifest.json'), 'utf8')); } catch {}
-            if (previous?.files) {
-                for (const relative of Object.keys(previous.files)) {
-                    const candidate = path.resolve(projectRoot, relative);
-                    if (!candidate.startsWith(`${projectRoot}${path.sep}`)) throw new Error('미리보기 manifest 경로 오류');
-                    try { previous.files[relative] = crypto.createHash('sha256').update(fs.readFileSync(candidate)).digest('hex'); } catch { delete previous.files[relative]; }
-                }
-            }
-            const result = await synchronizeSkills(temporary, selectedEngines, projectType, { ...options, dryRun: false });
-            const manifest = JSON.parse(fs.readFileSync(path.join(temporary, '.ai-core', 'install-manifest.json'), 'utf8'));
-            return { ...result, dryRun: true, changes: installationDiff(previous, manifest), note: '임시 사본에서 다운로드·검증했습니다. 대상 프로젝트는 변경하지 않았습니다. 설치 정보·캐시·잠금·템플릿도 실제 설치 때 갱신됩니다.' };
-        } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+    const previous = readManifest(projectRoot);
+    const conflicts = installConflicts(projectRoot, previous);
+    if (conflicts.length) {
+        if (options.dryRun) return { dryRun: true, ready: false, skillCount: 0, policyFiles: 0, changes: [], conflicts };
+        throw conflictError(conflicts);
     }
-    return transactionalInstall(projectRoot, async () => install(projectRoot, selectedEngines, projectType, options));
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-init-stage-'));
+    try {
+        const baseline = path.join(temporary, 'baseline'), staged = path.join(temporary, 'prepared');
+        fs.mkdirSync(baseline);
+        fs.mkdirSync(staged);
+        cloneInstallState(projectRoot, baseline);
+        cloneInstallState(baseline, staged);
+        const existingProfile = projectType === 'existing' ? inspectExistingProject(projectRoot) : null;
+        const result = await install(staged, selectedEngines, projectType, { ...options, previous, existingProfile });
+        const plan = createInstallationPlan(baseline, staged, result.resources, projectRoot);
+        const response = { ...result, resources: undefined, dryRun: Boolean(options.dryRun), ready: true, changes: plan.changes, conflicts: [], runtimeVerified: false };
+        if (!options.dryRun) {
+            await applyInstallationPlan(projectRoot, staged, plan);
+            (options.log || console.log)(`[설치 완료] ${PACKAGE.name} v${PACKAGE.version} · 스킬 ${result.skillCount}개 / 설치본 ${result.installedCopies}개 · 정책 ${result.policyFiles}개`);
+        } else response.note = '임시 사본에서 준비·검증했습니다. 변경 목록에는 구성·잠금·캐시·템플릿·설치 기록도 포함합니다. 대상 프로젝트와 스킬 코드는 실행·변경하지 않았습니다.';
+        return response;
+    } catch (error) {
+        if (options.dryRun && error.conflicts) return { dryRun: true, ready: false, skillCount: 0, policyFiles: 0, changes: [], conflicts: error.conflicts };
+        throw error;
+    } finally {
+        if (path.dirname(temporary) !== path.resolve(os.tmpdir()) || !path.basename(temporary).startsWith('ai-init-stage-')) throw new Error('임시 설치 폴더 경계 오류');
+        fs.rmSync(temporary, { recursive: true, force: true });
+    }
 }
 
-function prepareSkill(skill, sourcesRoot) {
-    const validation = validateSkill(skill.directory);
+function prepareSkill(skill, sourcesRoot, engines = ['codex']) {
+    const validation = validateSkill(skill.directory, path.basename(skill.directory), engines);
     if (!validSkillName(skill.name)) throw new Error(`올바르지 않은 설치 스킬 이름: ${skill.name}`);
-    if (skill.name === validation.name && !validation.explicitOnly) return { ...skill, validation };
-    const derived = path.join(sourcesRoot, '.derived', skill.sourceId, skill.name);
+    if (skill.name === validation.name && !(validation.explicitOnly && engines.some((engine) => ['codex', 'claude'].includes(engine)))) return { ...skill, validation, transformations: [] };
+    const derived = path.join(sourcesRoot, '.derived', engines.join('-'), skill.sourceId, skill.name);
     fs.rmSync(derived, { recursive: true, force: true });
     copyDirectory(skill.directory, derived);
     const file = path.join(derived, 'SKILL.md');
     const { document, body } = require('./lib/skills').frontmatter(fs.readFileSync(file, 'utf8'), file);
     document.set('name', skill.name);
-    fs.writeFileSync(file, `---\n${document.toString()}---\n${body}`, 'utf8');
-    if (validation.explicitOnly) {
-        const nativeFile = path.join(derived, 'agents', 'openai.yaml');
-        const native = fs.existsSync(nativeFile) ? YAML.parseDocument(fs.readFileSync(nativeFile, 'utf8')) : new YAML.Document({});
-        if (native.errors.length) throw new Error(`잘못된 호출 정책: ${nativeFile}`);
-        native.setIn(['policy', 'allow_implicit_invocation'], false);
-        fs.mkdirSync(path.dirname(nativeFile), { recursive: true });
-        fs.writeFileSync(nativeFile, native.toString(), 'utf8');
+    const transformations = [];
+    if (skill.name !== validation.name) transformations.push('name');
+    for (const engine of engines) {
+        const transformation = ENGINES[engine].adaptSkill?.({ directory: derived, document, explicitOnly: validation.explicitOnly });
+        if (transformation) transformations.push(transformation);
     }
-    return { ...skill, directory: derived, validation: validateSkill(derived) };
+    fs.writeFileSync(file, `---\n${document.toString()}---\n${body}`, 'utf8');
+    return { ...skill, directory: derived, validation: validateSkill(derived, skill.name, engines), transformations };
 }
 
 async function install(projectRoot, selectedEngines, projectType, options) {
@@ -712,34 +679,88 @@ async function install(projectRoot, selectedEngines, projectType, options) {
     const requested = options.skills || [];
     const available = skillGroups.flat();
     for (const name of requested) if (!available.some((skill) => skill.name === name)) throw new Error(`존재하지 않는 선택 스킬: ${name}`);
-    const skills = available.filter((skill) => skill.sourceId === 'jobkim' || !requested.length || requested.includes(skill.name)).map((skill) => prepareSkill(skill, sourcesRoot));
+    const skills = available.filter((skill) => skill.sourceId === 'jobkim' || !requested.length || requested.includes(skill.name));
     validateUniqueSkillNames(skills);
-    for (const skill of skills) for (const warning of skill.validation.warnings) log(`[검토] ${skill.name}: ${warning}`);
-
-    const existingProfile = projectType === 'existing' ? inspectExistingProject(projectRoot) : null;
-    const targetDirectory = path.join(projectRoot, '.agents', 'skills');
-    fs.mkdirSync(targetDirectory, { recursive: true });
-    const installedSkills = skills.filter((skill) => installSkill(skill, targetDirectory, log));
-    removeStaleManagedSkills(targetDirectory, new Set(installedSkills.map((skill) => skill.name)), log);
+    const installedSkills = [];
+    const resources = ['.ai-core/sources', '.ai-core/install-info.json', '.ai-core/install-manifest.json', '.ai-core/project-profile.json', CONFIG_NAME, LOCK_NAME, '.gitignore', '.agents/rules/project.md', '.agents/rules/local.md'];
+    const conflicts = [];
+    const derivedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-init-derived-'));
+    try {
+        for (const target of skillTargets(selectedEngines)) {
+            const targetDirectory = path.join(projectRoot, target.directory);
+            fs.mkdirSync(targetDirectory, { recursive: true });
+            for (const source of skills) {
+                const relative = `${target.directory}/${source.name}`;
+                if (pathExists(path.join(projectRoot, relative)) && !managedSkill(projectRoot, relative, source.sourceId)) {
+                    conflicts.push({ path: relative, message: '같은 이름의 사용자 스킬이 있습니다. 사용자 스킬을 보존하며 적용을 보류합니다.' });
+                    continue;
+                }
+                if (pathExists(path.join(projectRoot, relative)) && !options.previous?.skills.some((old) => skillPath(old, options.previous.schemaVersion) === relative)) {
+                    conflicts.push({ path: relative, message: '기존 관리 스킬의 무결성 기록이 없습니다. 원본을 별도 보관하고 해당 설치 경로를 비운 뒤 재설치하세요.' });
+                    continue;
+                }
+                const skill = prepareSkill(source, derivedRoot, target.engines);
+                for (const warning of skill.validation.warnings) log(`[검토] ${skill.name}: ${warning}`);
+                installSkill(skill, targetDirectory, log);
+                installedSkills.push({ ...skill, path: relative, engines: target.engines });
+                resources.push(relative);
+            }
+            const index = `${target.directory}/.ai-init-managed.json`;
+            const existingIndex = readJson(projectRoot, index);
+            if (existingIndex && existingIndex.managedBy !== USER_AGENT) conflicts.push({ path: index, message: '다른 소유자의 스킬 인덱스입니다. 기존 파일을 보존하며 적용을 보류합니다.' });
+            else writeJsonAtomic(path.join(projectRoot, index), { managedBy: USER_AGENT, skills: skills.map((skill) => skill.name).sort() });
+            resources.push(index);
+        }
+    } finally {
+        if (path.dirname(derivedRoot) !== path.resolve(os.tmpdir())) throw new Error('파생본 폴더 경계 오류');
+        fs.rmSync(derivedRoot, { recursive: true, force: true });
+    }
+    if (conflicts.length) throw conflictError(conflicts);
+    for (const old of options.previous?.skills || []) {
+        const relative = skillPath(old, options.previous.schemaVersion);
+        if (installedSkills.some((skill) => skill.path === relative)) continue;
+        const destination = path.resolve(projectRoot, relative);
+        if (path.relative(projectRoot, destination).startsWith('..')) throw new Error('스킬 정리 경로 오류');
+        fs.rmSync(destination, { recursive: true, force: true });
+        resources.push(relative);
+    }
+    for (const directory of SKILL_ROOTS) {
+        if (installedSkills.some((skill) => skill.path.startsWith(`${directory}/`))) continue;
+        const index = `${directory}/.ai-init-managed.json`;
+        let previousIndex;
+        try { previousIndex = readJson(projectRoot, index); } catch { continue; }
+        if (previousIndex?.managedBy === USER_AGENT) { fs.unlinkSync(path.join(projectRoot, index)); resources.push(index); }
+    }
     ensureCustomRuleTemplates(projectRoot);
-    updateGitignore(projectRoot);
+    updateGitignore(projectRoot, installedSkills);
+    const priorPolicies = options.previous?.policies || Object.keys(options.previous?.files || {}).filter((file) => policies.POLICY_PATHS.includes(file)).map((file) => ({ path: file, created: false }));
+    const desiredPolicies = policyPaths(projectRoot, selectedEngines);
+    const policyOrigins = desiredPolicies.map((file) => ({ path: file, created: priorPolicies.find((entry) => entry.path === file)?.created ?? !fs.existsSync(path.join(projectRoot, file)) }));
+    for (const record of priorPolicies) {
+        if (desiredPolicies.includes(record.path)) continue;
+        policies.removePolicyBlock(projectRoot, record);
+        resources.push(record.path);
+    }
     const policyTargets = installProjectPolicy(
         projectRoot,
         projectType,
         selectedEngines,
-        existingProfile,
+        options.existingProfile,
     );
+    resources.push(...desiredPolicies);
+    if (projectType === 'new' && pathExists(path.join(projectRoot, '.ai-core/project-profile.json'))) fs.unlinkSync(path.join(projectRoot, '.ai-core/project-profile.json'));
     writeJsonAtomic(path.join(projectRoot, LOCK_NAME), lock);
-    const manifest = buildManifest(projectRoot, installedSkills, policyTargets, { sources: lock.sources.filter((entry) => externalSources.some((source) => source.id === entry.id)) }, options.profile || 'full');
+    writeJsonAtomic(path.join(projectRoot, CONFIG_NAME), resolveConfiguration(null, { engines: selectedEngines, projectType, profile: options.profile, skills: options.skills }));
+    const manifest = buildManifest(projectRoot, installedSkills, policyTargets, { sources: lock.sources.filter((entry) => externalSources.some((source) => source.id === entry.id)) }, options.profile || 'full', expandEngines(selectedEngines), policyOrigins);
     writeJsonAtomic(path.join(projectRoot, '.ai-core', 'install-manifest.json'), manifest);
     writeInstallInfo(projectRoot, projectType, selectedEngines, options);
-    log(`[설치 완료] ${PACKAGE.name} v${PACKAGE.version} 적용 완료 · 공통 Agent Skills: ${installedSkills.length}개`);
-    log('       사용자 커스텀 규칙: .agents/rules/project.md (팀 공통) · .agents/rules/local.md (개인 로컬/Git제외)');
-
     return {
-        skillCount: installedSkills.length,
-        targetCount: 1,
+        skillCount: skills.length,
+        installedCopies: installedSkills.length,
+        targetCount: skillTargets(selectedEngines).length,
         policyFiles: policyTargets.length,
+        engines: expandEngines(selectedEngines),
+        resources,
     };
 }
 
@@ -790,7 +811,7 @@ async function runCli({
             const root = options.root || path.join(__dirname, 'bundled-skills');
             const directories = fs.existsSync(path.join(root, 'SKILL.md')) ? [root] : findSkillDirectories(root);
             const results = directories.map((directory) => {
-                try { return { directory, valid: true, ...validateSkill(directory) }; }
+                try { return { directory, valid: true, ...validateSkill(directory, path.basename(directory), options.engines ? expandEngines(options.engines) : []) }; }
                 catch (error) { return { directory, valid: false, error: error.message }; }
             });
             const valid = results.length > 0 && results.every((item) => item.valid);
@@ -798,34 +819,37 @@ async function runCli({
             if (!valid) process.exitCode = 1;
             return results;
         }
-        if (options.json && (!options.projectType || !options.engines)) throw new Error('--json 초기화에는 --type과 --engine을 지정하세요.');
-        let projectType = options.projectType;
-        let selectedEngines = options.engines;
-        if (!projectType || !selectedEngines) {
+        const saved = null;
+        const interactive = args.length === 0 || (!options.json && !options.projectType && !saved) || (!options.json && !options.engines && !options.addEngines && !saved);
+        if (interactive) {
             rl = readline.createInterface({ input, output });
             const ask = createQuestionReader(rl);
-        console.log('\n==================================================================');
-        console.log('Universal AI-Agent Dev Initializer');
-        console.log('==================================================================');
-        console.log('\n프로젝트 유형을 선택하세요.');
-        console.log('1) 신규 프로젝트');
-        console.log('2) 기존 프로젝트');
-
-        if (!projectType) projectType = parseProjectType(await ask('\n번호 입력 (1 또는 2): '));
-
-        console.log('\n활성화할 AI 엔진을 선택하세요 (복수 선택 가능).');
-        console.log('1) Codex');
-        console.log('2) Gemini/Antigravity');
-
-        if (!selectedEngines) selectedEngines = parseSelectedEngines(await ask('\n번호 입력 (1, 2 또는 1,2): '));
+            if (!options.projectType && !saved) {
+                output.write('\n프로젝트 유형\n1) 신규 프로젝트\n2) 기존 프로젝트\n');
+                options.projectType = parseProjectType(await ask('번호 입력: '));
+            }
+            if (!options.engines && !options.addEngines) {
+                const current = saved ? saved.engines.map((engine) => ENGINES[engine].label).join(', ') : null;
+                output.write(`\n사용할 AI — 복수 선택 가능${current ? `\n현재 선택: ${current} (Enter로 유지)` : ''}\n1) Codex\n2) Gemini CLI / Antigravity\n3) Claude Code\n4) 전체 선택\n`);
+                const answer = await ask('번호 입력: ');
+                if (answer.trim() || !saved) options.engines = parseSelectedEngines(answer);
+            }
         }
-        const installOptions = { ...options, request: fetch, log: options.json ? (message) => process.stderr.write(`${message}\n`) : console.log };
-        const result = args.length ? await synchronize(projectRoot, selectedEngines, projectType, installOptions) : await synchronize(projectRoot, selectedEngines, projectType);
+        if ((!options.projectType && !saved) || (!options.engines && !options.addEngines && !saved)) throw new Error('첫 비대화형 설치에는 --type과 --engine을 지정하세요.');
+        const config = resolveConfiguration(saved, options);
+        const installOptions = { ...options, ...config, request: fetch, log: (message) => (options.json ? process.stderr : output).write(`${message}\n`) };
+        const result = await synchronize(projectRoot, config.engines, config.projectType, installOptions);
         if (options.json) emit(result);
-        else output.write(`\n${options.dryRun ? '미리보기 검증' : '적용'}: 스킬 ${result.skillCount}개, 정책 ${result.policyFiles}개\n`);
+        else {
+            output.write(`\n${options.dryRun ? '미리보기' : '적용'}: 스킬 ${result.skillCount}개, 정책 ${result.policyFiles}개\n`);
+            for (const change of result.changes || []) output.write(`[${change.action}] ${change.path}\n`);
+            for (const conflict of result.conflicts || []) output.write(`[충돌] ${conflict.path}: ${conflict.message}\n`);
+            if (result.ready !== false) output.write(`다음 단계: 새 에이전트 세션을 시작하세요.${config.engines.includes('claude') ? ' Claude Code: claude (미설치 시 README의 설치 안내 참고)' : ''}\n`);
+        }
+        if (result.ready === false) process.exitCode = 1;
         return result;
     } catch (error) {
-        if (args.includes('--json')) output.write(`${JSON.stringify({ error: error.message })}\n`);
+        if (args.includes('--json')) output.write(`${JSON.stringify({ error: error.message, ...(error.conflicts ? { conflicts: error.conflicts } : {}) })}\n`);
         else console.error(`\n[오류] ${error.message}\n`);
         process.exitCode = 1;
     } finally {
