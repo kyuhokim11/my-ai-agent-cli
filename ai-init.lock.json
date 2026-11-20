@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "ponytail",
+      "owner": "DietrichGebert",
+      "repo": "ponytail",
+      "ref": "main",
+      "skillsPath": "skills",
+      "legalFiles": [
+        "LICENSE"
+      ],
+      "installPrefix": "",
+      "commit": "96608e078b2d5ea607c5c3b8b5a54d1c1fba6846",
+      "tree": "6bdee088de8ae2cfa05468b30291baa6f5faa62c"
+    },
+    {
+      "id": "paperthin",
+      "owner": "LilMGenius",
+      "repo": "paperthin",
+      "ref": "main",
+      "skillsPath": "skills",
+      "legalFiles": [
+        "LICENSE",
+        "NOTICE"
+      ],
+      "installPrefix": "",
+      "commit": "ed0df4b45f1e88b57ed9141504f3cb3e32c9715d",
+      "tree": "004b8c54356a82f5990d1e6b5de65e216cf6095f"
+    }
+  ]
+}

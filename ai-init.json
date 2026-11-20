@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "projectType": "existing",
+  "engines": [
+    "codex",
+    "gemini",
+    "antigravity",
+    "claude"
+  ],
+  "profile": "full",
+  "skills": []
+}
